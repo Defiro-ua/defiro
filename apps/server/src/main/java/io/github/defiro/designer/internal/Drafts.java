@@ -10,21 +10,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The drafts in the {@code designer} schema, each kept whole as JSON. */
+/** The Designer store: drafts in the {@code designer} schema, each kept whole as JSON. */
 @Repository
 class Drafts {
 
-    // Each draft with its latest version, if it was ever published.
-    private static final String DRAFTS = """
-            select d.id, d.revision, d.content,
-                   v.version, v.published_by, v.published_by_name, v.published_at
-            from designer.draft d
-            left join lateral (
-                select version, published_by, published_by_name, published_at
-                from designer.workflow_version
-                where workflow = d.id
-                order by version desc
-                limit 1) v on true""";
+    private static final String COLUMNS =
+            "id, revision, content, published_version, published_by, published_by_name, published_at";
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
@@ -45,25 +36,37 @@ class Drafts {
 
     /** Saves the draft whole as its next revision; empty if there is no such draft. */
     Optional<StoredDraft> save(UUID id, WorkflowDraft draft) {
-        int saved = jdbc.sql("update designer.draft set revision = revision + 1, content = cast(:content as jsonb)"
-                        + " where id = :id")
+        return jdbc.sql("update designer.draft set revision = revision + 1, content = cast(:content as jsonb)"
+                        + " where id = :id returning " + COLUMNS)
                 .param("id", id)
                 .param("content", json.writeValueAsString(draft))
-                .update();
-        return saved == 0 ? Optional.empty() : find(id);
+                .query(this::stored)
+                .optional();
     }
 
     Optional<StoredDraft> find(UUID id) {
-        return jdbc.sql(DRAFTS + " where d.id = :id")
+        return jdbc.sql("select " + COLUMNS + " from designer.draft where id = :id")
                 .param("id", id)
                 .query(this::stored)
                 .optional();
     }
 
     List<StoredDraft> all() {
-        return jdbc.sql(DRAFTS + " order by d.content ->> 'name', d.id")
+        return jdbc.sql("select " + COLUMNS + " from designer.draft order by content ->> 'name', id")
                 .query(this::stored)
                 .list();
+    }
+
+    /** Marks the draft as published at this revision, as this version, by this person, now. */
+    void markPublished(UUID id, int revision, int version, Publisher.Who who) {
+        jdbc.sql("update designer.draft set published_revision = :revision, published_version = :version,"
+                        + " published_by = :by, published_by_name = :byName, published_at = now() where id = :id")
+                .param("id", id)
+                .param("revision", revision)
+                .param("version", version)
+                .param("by", who.id())
+                .param("byName", who.name())
+                .update();
     }
 
     private StoredDraft stored(ResultSet row, int number) throws SQLException {
@@ -75,7 +78,7 @@ class Drafts {
     }
 
     private static Published published(ResultSet row) throws SQLException {
-        Integer version = row.getObject("version", Integer.class);
+        Integer version = row.getObject("published_version", Integer.class);
         if (version == null) {
             return null;
         }
