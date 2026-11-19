@@ -1,8 +1,6 @@
 package io.github.defiro.acceptance.designer;
 
-import static io.github.defiro.TestTokens.TRUSTED_KEY;
-import static io.github.defiro.TestTokens.bearer;
-import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
@@ -12,6 +10,9 @@ import static org.hamcrest.Matchers.hasItem;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import io.github.defiro.FakeEntraId;
+import io.github.defiro.FakeEntraId.Account;
+import io.github.defiro.acceptance.Browser;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
@@ -20,12 +21,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpHeaders;
 
 /**
  * UC03 through the Designer API. As in docs/sequence_diagram.txt, the browser holds the draft and
  * changes it, and the Designer creates, saves (whole), loads and publishes it: these steps play the
- * browser. Each scenario gets a new instance, so the fields hold that scenario's people, draft and
+ * browser. People sign in through Entra ID, as in UC01, and keep a session. Each scenario gets a new instance, so the fields hold that scenario's people, draft and
  * last answer.
  */
 public class CreateWorkflowSteps {
@@ -34,8 +34,9 @@ public class CreateWorkflowSteps {
     private static final String WORKFLOW_MANAGER = "WorkflowManager";
     private static final String DRAFTS = "/api/designer/drafts";
 
-    private String sofia;
-    private String ana;
+    private final FakeEntraId entraId = FakeEntraId.instance();
+    private final Browser sofia = new Browser();
+    private final Browser ana = new Browser();
     private String draftId;
     private Map<String, Object> draft;
     private Response response;
@@ -43,20 +44,15 @@ public class CreateWorkflowSteps {
 
     @Given("Sofia Almeida is a Workflow Manager")
     public void sofiaAlmeidaIsAWorkflowManager() {
-        sofia = bearer(
-                TRUSTED_KEY,
-                claims -> claims.subject("sofia.almeida")
-                        .claim("name", "Sofia Almeida")
-                        .claim("roles", List.of(WORKFLOW_MANAGER)));
+        entraId.save(new Account(
+                "Sofia Almeida", "Modernização Administrativa", "Gestora de workflows", "Rui Matos", WORKFLOW_MANAGER));
+        signIn(sofia, "Sofia Almeida");
     }
 
     @Given("Ana Ferreira is not a Workflow Manager")
     public void anaFerreiraIsNotAWorkflowManager() {
-        ana = bearer(
-                TRUSTED_KEY,
-                claims -> claims.subject("ana.ferreira")
-                        .claim("name", "Ana Ferreira")
-                        .claim("roles", List.of()));
+        entraId.save(new Account("Ana Ferreira", "Divisão de Obras Municipais", "Técnica Superior", "Rui Matos", null));
+        signIn(ana, "Ana Ferreira");
     }
 
     @Given("she is designing the workflow {string}")
@@ -247,7 +243,16 @@ public class CreateWorkflowSteps {
         return "steps.find { it.name == '%s' }".formatted(name);
     }
 
-    private RequestSpecification as(String person) {
-        return given().header(HttpHeaders.AUTHORIZATION, person).contentType(ContentType.JSON);
+    /** Signs in through Entra ID, as UC01 does, and loads the profile, which gives the CSRF cookie. */
+    private static void signIn(Browser browser, String name) {
+        assertThat(browser.signIn(name).statusCode()).as(name + " signs in").isEqualTo(302);
+        assertThat(browser.profile().statusCode()).isEqualTo(200);
+        assertThat(browser.cookie("XSRF-TOKEN"))
+                .as("the CSRF cookie the web app sends back")
+                .isNotNull();
+    }
+
+    private static RequestSpecification as(Browser person) {
+        return person.request().contentType(ContentType.JSON);
     }
 }
