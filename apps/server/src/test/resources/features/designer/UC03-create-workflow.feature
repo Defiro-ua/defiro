@@ -55,8 +55,6 @@ Feature: Create workflow
       Then the path is "Pedido", "Validação da chefia"
 
   Rule: Each step needs at least one reason, every reason needs a name, and return and reject reasons are separate
-    # open question: with two lists, «motivo 1» can be the first return reason or the first reject
-    #                reason. The error's field tells them apart; should the message say which list too?
 
     Scenario: A step with no reasons cannot be created
       Given the step "Validação da chefia" has no reasons
@@ -66,7 +64,7 @@ Feature: Create workflow
     Scenario: A reason with no name cannot be created
       Given the step "Validação da chefia" has a return reason with no name
       When she creates the workflow
-      Then it is refused with "Passo 2 («Validação da chefia»): dê um nome ao motivo 1."
+      Then it is refused with "Passo 2 («Validação da chefia»): dê um nome ao motivo de devolução 1."
 
     Scenario: Return and reject reasons are kept apart
       When she gives "Validação da chefia" the return reason "Preenchido incorretamente" and the reject reason "Pedido não autorizado"

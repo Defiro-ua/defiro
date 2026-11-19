@@ -115,7 +115,8 @@ class WorkflowDraftTest {
 
         assertThat(withSteps(step).problems(CATALOGUE))
                 .containsExactly(new Problem(
-                        "steps[1].returnReasons[0]", "Passo 2 («Validação da chefia»): dê um nome ao motivo 1."));
+                        "steps[1].returnReasons[0]",
+                        "Passo 2 («Validação da chefia»): dê um nome ao motivo de devolução 1."));
     }
 
     @Test
@@ -125,7 +126,8 @@ class WorkflowDraftTest {
 
         assertThat(withSteps(step).problems(CATALOGUE))
                 .containsExactly(new Problem(
-                        "steps[1].rejectReasons[1]", "Passo 2 («Validação da chefia»): dê um nome ao motivo 2."));
+                        "steps[1].rejectReasons[1]",
+                        "Passo 2 («Validação da chefia»): dê um nome ao motivo de rejeição 2."));
     }
 
     @Test

@@ -54,9 +54,10 @@ record WorkflowDraft(String name, List<Step> steps) {
     }
 
     /**
-     * The specification of this path. Each outcome of a step's plugin leads somewhere: «returned»
-     * back to the requester, to be corrected (UC20); «rejected» to the end; any other, such as
-     * «approved», to the next step, or to the end after the last one.
+     * The specification of this path. The Workflow Manager decides where an approved request goes
+     * by choosing the steps and their order: «approved» (or any other outcome that moves the request
+     * on) leads to the next step, or to the end after the last one. In the MVP, «returned» always
+     * goes back to the requester, to be corrected (UC18, UC20), and «rejected» ends the procedure.
      */
     WorkflowSpecification specification(Function<PluginRef, List<String>> outcomes) {
         List<StepSpecification> path = steps.stream()
@@ -128,16 +129,19 @@ record WorkflowDraft(String name, List<Step> steps) {
             problems.add(new Problem(
                     field + ".reasons", where + "acrescente pelo menos um motivo para devolver ou rejeitar."));
         }
-        problems.addAll(unnamed(step.returnReasons(), field + ".returnReasons", where));
-        problems.addAll(unnamed(step.rejectReasons(), field + ".rejectReasons", where));
+        problems.addAll(
+                unnamed(step.returnReasons(), field + ".returnReasons", where + "dê um nome ao motivo de devolução "));
+        problems.addAll(
+                unnamed(step.rejectReasons(), field + ".rejectReasons", where + "dê um nome ao motivo de rejeição "));
         return problems;
     }
 
-    private static List<Problem> unnamed(List<String> reasons, String field, String where) {
+    /** Reasons are numbered in their own list, so the message says which list. */
+    private static List<Problem> unnamed(List<String> reasons, String field, String message) {
         List<Problem> problems = new ArrayList<>();
         for (int j = 0; j < reasons.size(); j++) {
             if (isBlank(reasons.get(j))) {
-                problems.add(new Problem(field + "[" + j + "]", where + "dê um nome ao motivo " + (j + 1) + "."));
+                problems.add(new Problem(field + "[" + j + "]", message + (j + 1) + "."));
             }
         }
         return problems;
