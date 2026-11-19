@@ -1,7 +1,7 @@
 # Draft for team review: the examples come from the acceptance criteria of issue #27 and the
 # messages of the web prototype (apps/web/src/domain/designer.ts). No Example Mapping was run yet.
-# @wip until the Designer API exists: the pipeline skips it.
-@UC03 @wip
+# Each rule stays @wip until the Designer API does what it says: the pipeline skips those.
+@UC03
 Feature: Create workflow
   As a Workflow Manager,
   I want to create a workflow in the designer, one question at a time,
@@ -35,6 +35,7 @@ Feature: Create workflow
       When she goes back
       Then the name "Ajudas de custo" is still there
 
+  @wip
   Rule: Each review step has a name, who handles it, a deadline and its reasons
     # open question (UC06, NXS2608): does the designer only store the deadline, with the 1 to 90 rule in UC06?
 
@@ -42,6 +43,7 @@ Feature: Create workflow
       When she adds the review step "Validação da chefia" handled by "Chefias da unidade do requerente" with a deadline of 5 working days
       Then the path is "Pedido", "Validação da chefia"
 
+  @wip
   Rule: Each step needs at least one reason, every reason needs a name, and return and reject reasons are separate
 
     Scenario: A step with no reasons cannot be created
@@ -59,6 +61,7 @@ Feature: Create workflow
       Then "Validação da chefia" can be returned for "Preenchido incorretamente" only
       And it can be rejected for "Pedido não autorizado" only
 
+  @wip
   Rule: Steps can be edited, moved, removed or added, and the final validation is always last
     # open question: can the request step «Pedido» ever be removed or moved? The prototype says no.
 
@@ -89,6 +92,7 @@ Feature: Create workflow
       When she creates the workflow
       Then it is refused with "Dê um nome ao workflow." on the workflow's name
 
+  @wip
   Rule: Creating a complete workflow makes it active, with the notice «Workflow criado»
 
     Scenario: Creating a complete workflow
@@ -96,6 +100,7 @@ Feature: Create workflow
       When she creates the workflow
       Then "Ajudas de custo" is active as version 1
 
+  @wip
   Rule: The new workflow appears in «Workflows» and in «Novo pedido» for the people allowed to request it
     # open question: «Novo pedido» belongs to UC13 (Engine); that part is tested once UC13 exists.
 
