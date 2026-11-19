@@ -1,15 +1,18 @@
 package io.github.defiro.designer.internal;
 
+import io.github.defiro.registry.PluginCatalogue;
+import io.github.defiro.spec.PluginRef;
 import java.net.URI;
+import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import java.util.function.UnaryOperator;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -18,7 +21,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** The drafts a Workflow Manager designs, one change at a time. Each answer is the whole draft. */
+/**
+ * The drafts of the Workflow Managers. The browser changes a draft and saves it whole; publishing
+ * checks it and deploys it to the Engine. «Workflows» lists the drafts, with the version each one
+ * was published as.
+ */
 // Only a Workflow Manager designs workflows: the app role that identity turns into a role.
 @PreAuthorize("hasRole('WorkflowManager')")
 @RestController
@@ -26,71 +33,75 @@ import org.springframework.web.server.ResponseStatusException;
 class DraftController {
 
     private final Drafts drafts;
+    private final Publisher publisher;
+    private final PluginCatalogue catalogue;
 
-    DraftController(Drafts drafts) {
+    DraftController(Drafts drafts, Publisher publisher, PluginCatalogue catalogue) {
         this.drafts = drafts;
+        this.publisher = publisher;
+        this.catalogue = catalogue;
     }
 
-    record Name(String name) {}
+    record NewDraft(String name) {}
 
-    record NewStep(StepType type, String name, String handledBy, Integer deadline) {
-        Step toStep() {
-            return type == StepType.FINAL_VALIDATION ? Step.finalValidation() : Step.review(name, handledBy, deadline);
-        }
-    }
-
-    record Move(Direction direction) {}
-
-    record DraftView(UUID id, String name, List<Step> steps) {
-        DraftView(UUID id, WorkflowDraft draft) {
-            this(id, draft.name(), draft.steps());
+    record DraftView(UUID id, int revision, String name, List<Step> steps, Integer publishedVersion) {
+        DraftView(StoredDraft stored) {
+            this(
+                    stored.id(),
+                    stored.revision(),
+                    stored.draft().name(),
+                    stored.draft().steps(),
+                    stored.publishedVersion());
         }
     }
 
     @PostMapping
-    ResponseEntity<DraftView> start(@RequestBody Name request) {
-        WorkflowDraft draft = WorkflowDraft.named(request.name());
-        UUID id = drafts.add(draft);
-        return ResponseEntity.created(URI.create("/api/designer/drafts/" + id)).body(new DraftView(id, draft));
+    ResponseEntity<DraftView> start(@RequestBody NewDraft request) {
+        StoredDraft stored = drafts.add(WorkflowDraft.named(request.name(), requestPlugin()));
+        return ResponseEntity.created(URI.create("/api/designer/drafts/" + stored.id()))
+                .body(new DraftView(stored));
+    }
+
+    @GetMapping
+    List<DraftView> list() {
+        return drafts.all().stream().map(DraftView::new).toList();
     }
 
     @GetMapping("/{id}")
-    DraftView show(@PathVariable UUID id) {
-        return new DraftView(id, find(id));
+    DraftView load(@PathVariable UUID id) {
+        return new DraftView(drafts.find(id).orElseThrow(DraftController::notFound));
     }
 
-    @PatchMapping("/{id}")
-    DraftView rename(@PathVariable UUID id, @RequestBody Name request) {
-        return change(id, draft -> draft.withName(request.name()));
+    @PutMapping("/{id}")
+    DraftView save(@PathVariable UUID id, @RequestBody WorkflowDraft draft) {
+        return new DraftView(drafts.save(id, draft).orElseThrow(DraftController::notFound));
     }
 
-    @PostMapping("/{id}/steps")
-    DraftView addStep(@PathVariable UUID id, @RequestBody NewStep step) {
-        return change(id, draft -> draft.with(step.toStep()));
+    @PostMapping("/{id}/publish")
+    ResponseEntity<Map<String, Integer>> publish(@PathVariable UUID id, Principal publishedBy) {
+        int version = publisher.publish(id, publishedBy.getName()).orElseThrow(DraftController::notFound);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("version", version));
     }
 
-    @PostMapping("/{id}/steps/{stepId}/move")
-    DraftView moveStep(@PathVariable UUID id, @PathVariable String stepId, @RequestBody Move move) {
-        return change(id, draft -> draft.move(stepId, move.direction()));
+    /** Refuses a draft with missing or invalid answers, naming each field and what is wrong with it. */
+    @ExceptionHandler
+    ProblemDetail refuse(IncompleteWorkflowException refused) {
+        ProblemDetail refusal = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        refusal.setTitle("O workflow tem respostas em falta ou inválidas.");
+        refusal.setProperty("errors", refused.problems());
+        return refusal;
     }
 
-    @PutMapping("/{id}/steps/{stepId}/reasons")
-    DraftView giveReasons(@PathVariable UUID id, @PathVariable String stepId, @RequestBody List<Reason> reasons) {
-        return change(id, draft -> draft.withReasons(stepId, reasons));
+    /** The plugin of the request, as the catalogue has it. */
+    private PluginRef requestPlugin() {
+        return catalogue.plugins().stream()
+                .filter(plugin -> plugin.name().equals(WorkflowDraft.SUBMISSION))
+                .findFirst()
+                .orElseThrow()
+                .plugin();
     }
 
-    @DeleteMapping("/{id}/steps/{stepId}")
-    DraftView removeStep(@PathVariable UUID id, @PathVariable String stepId) {
-        return change(id, draft -> draft.without(stepId));
-    }
-
-    private DraftView change(UUID id, UnaryOperator<WorkflowDraft> change) {
-        WorkflowDraft changed = change.apply(find(id));
-        drafts.replace(id, changed);
-        return new DraftView(id, changed);
-    }
-
-    private WorkflowDraft find(UUID id) {
-        return drafts.find(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    private static ResponseStatusException notFound() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND);
     }
 }

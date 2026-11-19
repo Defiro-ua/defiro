@@ -29,7 +29,6 @@ class DesignerAccessIT {
 
     // Ids that exist nowhere: the role is checked before the draft is looked up.
     static final String DRAFT = "/api/designer/drafts/6f1c2a5e-0b7d-4c4e-9a51-3d2f8e7b9c10";
-    static final String STEP = DRAFT + "/steps/0c9e8d7f-6a5b-4c3d-8e2f-1a0b9c8d7e6f";
 
     @Autowired
     MockMvc mvc;
@@ -40,15 +39,12 @@ class DesignerAccessIT {
     @CsvSource(
             delimiter = '|',
             value = {
-                "POST   | /api/designer/drafts     | {}",
-                "GET    | " + DRAFT + "            | {}",
-                "PATCH  | " + DRAFT + "            | {}",
-                "POST   | " + DRAFT + "/steps      | {}",
-                "POST   | " + STEP + "/move        | {}",
-                "PUT    | " + STEP + "/reasons     | []",
-                "DELETE | " + STEP + "             | {}",
-                "POST   | /api/designer/workflows  | {}",
-                "GET    | /api/designer/workflows  | {}"
+                "POST   | /api/designer/drafts       | {}",
+                "GET    | /api/designer/drafts       | {}",
+                "GET    | " + DRAFT + "              | {}",
+                "PUT    | " + DRAFT + "              | {}",
+                "POST   | " + DRAFT + "/publish      | {}",
+                "GET    | /api/designer/step-types   | {}"
             })
     void someoneWithoutTheWorkflowManagerRoleIsRefused(String method, String path, String body) throws Exception {
         String employee = bearer(TRUSTED_KEY, claims -> claims.claim("roles", List.of()));
@@ -61,11 +57,11 @@ class DesignerAccessIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, " + DRAFT, "GET, /api/designer/workflows"})
+    @CsvSource({"GET, " + DRAFT, "GET, /api/designer/drafts", "GET, /api/designer/step-types"})
     void aWorkflowManagerGetsPastTheCheck(String method, String path) throws Exception {
         String workflowManager = bearer(TRUSTED_KEY, claims -> claims.claim("roles", List.of("WorkflowManager")));
 
-        // The draft does not exist (404) and the list is there (200): neither is 401 or 403.
+        // The draft does not exist (404) and the lists are there (200): neither is 401 or 403.
         mvc.perform(request(HttpMethod.valueOf(method), path).header(HttpHeaders.AUTHORIZATION, workflowManager))
                 .andExpect(
                         result -> assertThat(result.getResponse().getStatus()).isIn(200, 404));

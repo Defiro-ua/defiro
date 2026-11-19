@@ -1,38 +1,42 @@
 package io.github.defiro.designer.internal;
 
+import io.github.defiro.spec.PluginRef;
 import java.util.List;
-import java.util.UUID;
 
 /**
- * One step of a workflow's path.
+ * One step of a draft's path, as the browser sends it.
  *
- * @param handledBy the group that handles the step
- * @param deadline the legal deadline, in working days
- * @param reasons why the step may return or reject a request
+ * @param plugin the step type, from the Plugin Registry's catalogue
+ * @param handledBy the group or unit that handles the step; for the request, who can make it
+ * @param deadline the legal deadline in working days; the request has none
  */
-record Step(String id, StepType type, String name, String handledBy, Integer deadline, List<Reason> reasons) {
+record Step(
+        String id,
+        PluginRef plugin,
+        String name,
+        String handledBy,
+        Integer deadline,
+        List<String> returnReasons,
+        List<String> rejectReasons) {
 
     Step {
-        reasons = reasons == null ? List.of() : List.copyOf(reasons);
+        returnReasons = returnReasons == null ? List.of() : List.copyOf(returnReasons);
+        rejectReasons = rejectReasons == null ? List.of() : List.copyOf(rejectReasons);
     }
 
-    static Step request() {
-        return new Step(newId(), StepType.REQUEST, "Pedido", null, null, List.of());
+    Step withPlugin(PluginRef newPlugin) {
+        return new Step(id, newPlugin, name, handledBy, deadline, returnReasons, rejectReasons);
     }
 
-    static Step review(String name, String handledBy, Integer deadline) {
-        return new Step(newId(), StepType.REVIEW, name, handledBy, deadline, List.of());
+    Step withHandledBy(String newHandledBy) {
+        return new Step(id, plugin, name, newHandledBy, deadline, returnReasons, rejectReasons);
     }
 
-    static Step finalValidation() {
-        return new Step(newId(), StepType.FINAL_VALIDATION, "Validação final", null, null, List.of());
+    Step withDeadline(Integer newDeadline) {
+        return new Step(id, plugin, name, handledBy, newDeadline, returnReasons, rejectReasons);
     }
 
-    Step withReasons(List<Reason> newReasons) {
-        return new Step(id, type, name, handledBy, deadline, newReasons);
-    }
-
-    private static String newId() {
-        return UUID.randomUUID().toString();
+    Step withReasons(List<String> newReturnReasons, List<String> newRejectReasons) {
+        return new Step(id, plugin, name, handledBy, deadline, newReturnReasons, newRejectReasons);
     }
 }

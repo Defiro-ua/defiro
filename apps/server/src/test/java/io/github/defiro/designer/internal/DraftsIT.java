@@ -1,5 +1,7 @@
 package io.github.defiro.designer.internal;
 
+import static io.github.defiro.designer.internal.WorkflowDraftTest.complete;
+import static io.github.defiro.designer.internal.WorkflowDraftTest.withSteps;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.defiro.TestcontainersConfiguration;
@@ -17,26 +19,38 @@ class DraftsIT {
     Drafts drafts;
 
     @Test
-    void aSavedDraftComesBackAsItWas() {
-        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo")
-                .with(Step.review("Validação da chefia", "Chefias da unidade do requerente", 5));
-        UUID id = drafts.add(draft);
+    void aNewDraftIsTheFirstRevisionAndUnpublished() {
+        StoredDraft added = drafts.add(withSteps(complete("Validação da chefia")));
 
-        assertThat(drafts.find(id)).contains(draft);
+        assertThat(drafts.find(added.id())).contains(added);
+        assertThat(added.revision()).isEqualTo(1);
+        assertThat(added.publishedVersion()).isNull();
     }
 
     @Test
-    void aSavedDraftCanBeReplaced() {
-        UUID id = drafts.add(WorkflowDraft.named("Ajudas de custo"));
-        WorkflowDraft renamed = WorkflowDraft.named("Horas extraordinárias");
+    void savingKeepsTheWholeDraftAsTheNextRevision() {
+        UUID id = drafts.add(withSteps()).id();
+        WorkflowDraft changed = withSteps(complete("Validação da chefia"), complete("Verificação financeira"));
 
-        drafts.replace(id, renamed);
+        StoredDraft saved = drafts.save(id, changed).orElseThrow();
 
-        assertThat(drafts.find(id)).contains(renamed);
+        assertThat(saved.revision()).isEqualTo(2);
+        assertThat(drafts.find(id).orElseThrow().draft()).isEqualTo(changed);
     }
 
     @Test
-    void anUnknownDraftIsNotFound() {
+    void anUnknownDraftIsNeitherFoundNorSaved() {
         assertThat(drafts.find(UUID.randomUUID())).isEmpty();
+        assertThat(drafts.save(UUID.randomUUID(), withSteps())).isEmpty();
+    }
+
+    @Test
+    void aPublishedDraftKeepsTheVersionTheEngineGave() {
+        UUID id = drafts.add(withSteps(complete("Validação da chefia"))).id();
+
+        drafts.markPublished(id, 1, 3);
+
+        assertThat(drafts.find(id).orElseThrow().publishedVersion()).isEqualTo(3);
+        assertThat(drafts.all()).extracting(StoredDraft::id).contains(id);
     }
 }

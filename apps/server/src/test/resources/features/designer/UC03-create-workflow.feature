@@ -55,6 +55,8 @@ Feature: Create workflow
       Then the path is "Pedido", "Validação da chefia"
 
   Rule: Each step needs at least one reason, every reason needs a name, and return and reject reasons are separate
+    # open question: with two lists, «motivo 1» can be the first return reason or the first reject
+    #                reason. The error's field tells them apart; should the message say which list too?
 
     Scenario: A step with no reasons cannot be created
       Given the step "Validação da chefia" has no reasons
@@ -71,6 +73,10 @@ Feature: Create workflow
       Then "Validação da chefia" can be returned for "Preenchido incorretamente" only
       And it can be rejected for "Pedido não autorizado" only
 
+  # The path is edited in the browser, and the Designer only stores the whole draft
+  # (docs/sequence_diagram.txt, UC03): these run in the UC03 browser journey. When publishing, the
+  # Designer still refuses a path whose final validation is not last or not alone.
+  @browser
   Rule: Steps can be edited, moved, removed or added, and the final validation is always last
     # open question: can the request step «Pedido» ever be removed or moved? The prototype says no.
 
