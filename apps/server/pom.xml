@@ -19,6 +19,7 @@
         <!-- Acceptance tests: Cucumber scenarios over the REST API. Spring Boot manages neither. -->
         <cucumber.version>8.0.4</cucumber.version>
         <rest-assured.version>6.3.0</rest-assured.version>
+        <playwright.version>1.64.0</playwright.version>
     </properties>
 
     <dependencies>
@@ -182,6 +183,13 @@
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
             <version>${rest-assured.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The @browser scenarios drive a real browser through the web app. -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>${playwright.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
