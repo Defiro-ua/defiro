@@ -7,6 +7,7 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.function.Consumer;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
@@ -28,19 +29,26 @@ public final class TestTokens {
 
     private TestTokens() {}
 
-    /** An {@code Authorization} header value with a token signed by {@code key}. */
+    /** An {@code Authorization} header value with a token signed by {@code key}, valid for 5 minutes. */
     public static String bearer(RSAKey key) {
+        return bearer(key, claims -> {});
+    }
+
+    /**
+     * Like {@link #bearer(RSAKey)}, with the claims changed by {@code claims}: for example an expiry in
+     * the past. Times stay relative to now, like the app's own validation.
+     */
+    public static String bearer(RSAKey key, Consumer<JwtClaimsSet.Builder> claims) {
         Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject("test-user")
-                .issuedAt(now)
-                .expiresAt(now.plus(5, ChronoUnit.MINUTES))
-                .build();
+        JwtClaimsSet.Builder builder =
+                JwtClaimsSet.builder().subject("test-user").issuedAt(now).expiresAt(now.plus(5, ChronoUnit.MINUTES));
+        claims.accept(builder);
         JwsHeader header =
                 JwsHeader.with(SignatureAlgorithm.RS256).keyId(key.getKeyID()).build();
         NimbusJwtEncoder encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(key)));
         return "Bearer "
-                + encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+                + encoder.encode(JwtEncoderParameters.from(header, builder.build()))
+                        .getTokenValue();
     }
 
     public static RSAKey newKey() {
