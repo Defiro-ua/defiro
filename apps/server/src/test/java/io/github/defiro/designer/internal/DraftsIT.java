@@ -21,6 +21,9 @@ class DraftsIT {
     @Autowired
     Drafts drafts;
 
+    @Autowired
+    WorkflowVersions versions;
+
     @Test
     void aNewDraftIsTheFirstRevisionAndUnpublished() {
         StoredDraft added = drafts.add(withSteps(complete("Validação da chefia")));
@@ -48,10 +51,13 @@ class DraftsIT {
     }
 
     @Test
-    void aPublishedDraftKeepsTheVersionTheEngineGaveAndWhoPublishedItWhen() {
+    void aPublishedDraftShowsItsLatestVersionAndWhoPublishedItWhen() {
         UUID id = drafts.add(withSteps(complete("Validação da chefia"))).id();
 
-        drafts.markPublished(id, 1, 3, new Publisher.Who("sofia.almeida", "Sofia Almeida"));
+        Publisher.Who sofia = new Publisher.Who("sofia.almeida", "Sofia Almeida");
+        versions.add(id, 1, WorkflowVersionsIT.specification("Ajudas de custo"), sofia);
+        versions.add(id, 2, WorkflowVersionsIT.specification("Ajudas de custo"), sofia);
+        versions.add(id, 3, WorkflowVersionsIT.specification("Ajudas de custo"), sofia);
 
         Published published = drafts.find(id).orElseThrow().published();
         assertThat(published.version()).isEqualTo(3);
