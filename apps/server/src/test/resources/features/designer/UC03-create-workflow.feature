@@ -35,7 +35,6 @@ Feature: Create workflow
       When she goes back
       Then the name "Ajudas de custo" is still there
 
-  @wip
   Rule: Each review step has a name, who handles it, a deadline and its reasons
     # open question (UC06, NXS2608): does the designer only store the deadline, with the 1 to 90 rule in UC06?
 
