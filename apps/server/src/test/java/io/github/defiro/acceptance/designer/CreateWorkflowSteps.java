@@ -1,12 +1,15 @@
 package io.github.defiro.acceptance.designer;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
 
+import com.microsoft.playwright.Locator;
+import io.cucumber.java.After;
+import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -21,12 +24,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * UC03 through the Designer API. As in docs/sequence_diagram.txt, the browser holds the draft and
  * changes it, and the Designer creates, saves (whole), loads and publishes it: these steps play the
- * browser. People sign in through Entra ID, as in UC01, and keep a session. Each scenario gets a new instance, so the fields hold that scenario's people, draft and
- * last answer.
+ * browser. People sign in through Entra ID, as in UC01, and keep a session. Each scenario gets a new
+ * instance, so the fields hold that scenario's people, draft and last answer.
+ *
+ * <p>The {@code @browser} scenarios also open the web app in a real browser ({@link DesignerScreen}).
+ * Some steps read the same as a Given and as a Then, such as "the path is ...", and Cucumber gives
+ * both one method: before any When, the step builds what it says through the API; after a When, it
+ * checks it, on the screen in a browser scenario, otherwise through the API.
  */
 public class CreateWorkflowSteps {
 
@@ -41,6 +51,22 @@ public class CreateWorkflowSteps {
     private Map<String, Object> draft;
     private Response response;
     private String lastStep;
+    private DesignerScreen screen;
+    private boolean acted;
+
+    // The port of the server under test, which also serves the web app
+    @Value("${local.server.port}")
+    int port;
+
+    @Before("@browser")
+    public void openTheBrowser() {
+        screen = new DesignerScreen(port);
+    }
+
+    @After("@browser")
+    public void closeTheBrowser() {
+        screen.close();
+    }
 
     @Given("Sofia Almeida is a Workflow Manager")
     public void sofiaAlmeidaIsAWorkflowManager() {
@@ -85,13 +111,125 @@ public class CreateWorkflowSteps {
 
     @When("she adds the review step {string} handled by {string} with a deadline of {int} working days")
     public void sheAddsTheReviewStep(String name, String handledBy, int deadline) {
+        acted = true;
         steps().add(reviewStep(name, handledBy, deadline));
         save();
     }
 
-    @Then("the path is {string}, {string}")
+    @Given("the path is {string}, {string}")
     public void thePathIs(String first, String second) {
-        load().then().body("steps.name", contains(first, second));
+        thePathIs(List.of(first, second));
+    }
+
+    @Given("the path is {string}, {string}, {string}")
+    public void thePathIs(String first, String second, String third) {
+        thePathIs(List.of(first, second, third));
+    }
+
+    @Given("the path ends with {string}")
+    public void thePathEndsWith(String step) {
+        if (!acted) {
+            steps().add(finalValidationStep());
+            save();
+            openThePath();
+        }
+        if (screen != null) {
+            assertThat(screen.path().last()).containsText(step);
+        } else {
+            load().then().body("steps[-1].name", equalTo(step));
+        }
+    }
+
+    @Then("the path has one {string}")
+    public void thePathHasOne(String step) {
+        assertThat(screen.path().filter(new Locator.FilterOptions().setHasText(step)))
+                .hasCount(1);
+    }
+
+    @When("she moves {string} up")
+    public void sheMovesUp(String step) {
+        acted = true;
+        screen.moveUp(step);
+    }
+
+    @When("she removes {string}")
+    public void sheRemoves(String step) {
+        acted = true;
+        screen.remove(step);
+    }
+
+    @When("she adds a final validation step")
+    public void sheAddsAFinalValidationStep() {
+        acted = true;
+        screen.addFinalValidation();
+    }
+
+    @When("Sofia Almeida opens defiro")
+    public void sofiaAlmeidaOpensDefiro() {
+        acted = true;
+        screen.signInAs("Sofia Almeida");
+    }
+
+    @Then("«Criar workflow» is the main button of her side menu")
+    public void criarWorkflowIsTheMainButtonOfHerSideMenu() {
+        assertThat(screen.menu().first()).hasText("Criar workflow");
+    }
+
+    @When("she starts creating a workflow")
+    public void sheStartsCreatingAWorkflow() {
+        acted = true;
+        screen.signInAs("Sofia Almeida");
+        screen.openMenuItem("Criar workflow");
+    }
+
+    @Then("^she sees the screen for the name with «(.+)»$")
+    public void sheSeesTheScreenForTheNameWith(String kicker) {
+        assertThat(screen.question()).containsText("Como se chama o workflow?");
+        assertThat(screen.kicker(kicker)).isVisible();
+    }
+
+    @Given("she named the workflow and moved on")
+    public void sheNamedTheWorkflowAndMovedOn() {
+        screen.signInAs("Sofia Almeida");
+        screen.openDraft(draftId, null);
+        screen.workflowName().fill((String) draft.get("name"));
+        screen.goOn();
+        assertThat(screen.question()).containsText("Quem pode fazer este pedido?");
+    }
+
+    @When("she goes back")
+    public void sheGoesBack() {
+        acted = true;
+        screen.goBack();
+    }
+
+    @Then("the name {string} is still there")
+    public void theNameIsStillThere(String name) {
+        assertThat(screen.workflowName()).hasValue(name);
+    }
+
+    /** The draft's path is these steps: built through the API before any When, then checked. */
+    private void thePathIs(List<String> names) {
+        if (!acted) {
+            names.stream()
+                    .skip(1)
+                    .forEach(name -> steps().add(reviewStep(name, "Chefias da unidade do requerente", 5)));
+            save();
+            openThePath();
+        }
+        if (screen != null) {
+            assertThat(screen.path()).containsText(names.toArray(String[]::new));
+        } else {
+            load().then().body("steps.name", contains(names.toArray()));
+        }
+    }
+
+    /** In a browser scenario, Sofia opens the draft on its path screen */
+    private void openThePath() {
+        if (screen != null) {
+            screen.signInAs("Sofia Almeida");
+            screen.openDraft(draftId, "percurso");
+        }
     }
 
     @Given("the step {string} has no reasons")
@@ -106,6 +244,7 @@ public class CreateWorkflowSteps {
 
     @When("she gives {string} the return reason {string} and the reject reason {string}")
     public void sheGivesTheReasons(String step, String returnReason, String rejectReason) {
+        acted = true;
         giveReasons(step, List.of(returnReason), List.of(rejectReason));
     }
 
@@ -141,11 +280,13 @@ public class CreateWorkflowSteps {
 
     @When("she creates the workflow")
     public void sheCreatesTheWorkflow() {
+        acted = true;
         response = as(sofia).post(DRAFTS + "/" + draftId + "/publish");
     }
 
     @When("she opens the list of workflows")
     public void sheOpensTheListOfWorkflows() {
+        acted = true;
         response = as(sofia).get(DRAFTS);
     }
 
@@ -191,6 +332,12 @@ public class CreateWorkflowSteps {
         step.put("returnReasons", returnReasons);
         step.put("rejectReasons", rejectReasons);
         save();
+    }
+
+    private Map<String, Object> finalValidationStep() {
+        Map<String, Object> step = reviewStep("Validação final", "Divisão Financeira", 10);
+        step.put("plugin", stepType("final-validation"));
+        return step;
     }
 
     private Map<String, Object> reviewStep(String name, String handledBy, int deadline) {
@@ -245,9 +392,11 @@ public class CreateWorkflowSteps {
 
     /** Signs in through Entra ID, as UC01 does, and loads the profile, which gives the CSRF cookie. */
     private static void signIn(Browser browser, String name) {
-        assertThat(browser.signIn(name).statusCode()).as(name + " signs in").isEqualTo(302);
-        assertThat(browser.profile().statusCode()).isEqualTo(200);
-        assertThat(browser.cookie("XSRF-TOKEN"))
+        Assertions.assertThat(browser.signIn(name).statusCode())
+                .as(name + " signs in")
+                .isEqualTo(302);
+        Assertions.assertThat(browser.profile().statusCode()).isEqualTo(200);
+        Assertions.assertThat(browser.cookie("XSRF-TOKEN"))
                 .as("the CSRF cookie the web app sends back")
                 .isNotNull();
     }

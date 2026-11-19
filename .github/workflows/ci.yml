@@ -183,9 +183,28 @@ jobs:
           java-version: 21
           cache: maven
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # The @browser scenarios open the web app in Chromium (Playwright): the server under test serves
+      # this build, as nginx does in production.
+      - name: Build the web app
+        working-directory: apps/web
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      # The same Playwright version as apps/server/pom.xml, so the browser is the one the tests expect.
+      - name: Install Chromium
+        working-directory: apps/web
+        run: npx --yes playwright@1.64.0 install --with-deps chromium
+
       # Testcontainers uses the runner's Docker. Failed tests are never re-run: a flaky test is a defect.
       - name: Run integration tests
-        run: ./mvnw -B verify -DskipUTs
+        run: ./mvnw -B verify -DskipUTs "-Dcucumber.filter.tags=not @wip"
 
       - name: Pack integration test coverage
         run: find . -path '*/target/site/jacoco-it/jacoco.xml' -print0 | tar --null -czf coverage-it.tgz -T -
