@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +29,13 @@ class DraftController {
 
     record Name(String name) {}
 
-    record NewStep(String name, String handledBy, Integer deadline) {}
+    record NewStep(StepType type, String name, String handledBy, Integer deadline) {
+        Step toStep() {
+            return type == StepType.FINAL_VALIDATION ? Step.finalValidation() : Step.review(name, handledBy, deadline);
+        }
+    }
+
+    record Move(Direction direction) {}
 
     record DraftView(UUID id, String name, List<Step> steps) {
         DraftView(UUID id, WorkflowDraft draft) {
@@ -55,7 +62,17 @@ class DraftController {
 
     @PostMapping("/{id}/steps")
     DraftView addStep(@PathVariable UUID id, @RequestBody NewStep step) {
-        return change(id, draft -> draft.with(Step.review(step.name(), step.handledBy(), step.deadline())));
+        return change(id, draft -> draft.with(step.toStep()));
+    }
+
+    @PostMapping("/{id}/steps/{stepId}/move")
+    DraftView moveStep(@PathVariable UUID id, @PathVariable String stepId, @RequestBody Move move) {
+        return change(id, draft -> draft.move(stepId, move.direction()));
+    }
+
+    @DeleteMapping("/{id}/steps/{stepId}")
+    DraftView removeStep(@PathVariable UUID id, @PathVariable String stepId) {
+        return change(id, draft -> draft.without(stepId));
     }
 
     private DraftView change(UUID id, UnaryOperator<WorkflowDraft> change) {

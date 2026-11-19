@@ -5,6 +5,7 @@ import static io.github.defiro.TestTokens.bearer;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
 
@@ -79,6 +80,45 @@ public class CreateWorkflowSteps {
         asSofia().body(Map.of("name", "")).patch(draft).then().statusCode(200);
     }
 
+    @When("she moves {string} up")
+    public void sheMovesUp(String step) {
+        acted = true;
+        asSofia()
+                .body(Map.of("direction", "UP"))
+                .post(draft + "/steps/" + stepId(step) + "/move")
+                .then()
+                .statusCode(200);
+    }
+
+    @When("she removes {string}")
+    public void sheRemoves(String step) {
+        acted = true;
+        asSofia().delete(draft + "/steps/" + stepId(step)).then().statusCode(200);
+    }
+
+    @When("she adds a final validation step")
+    public void sheAddsAFinalValidationStep() {
+        acted = true;
+        addFinalValidation();
+    }
+
+    @Given("the path ends with {string}")
+    public void thePathEndsWith(String step) {
+        if (!acted) {
+            addFinalValidation();
+        }
+        asSofia().get(draft).then().statusCode(200).body("steps[-1].name", equalTo(step));
+    }
+
+    @Then("the path has one {string}")
+    public void thePathHasOne(String step) {
+        asSofia()
+                .get(draft)
+                .then()
+                .statusCode(200)
+                .body("steps.findAll { it.name == '%s' }.size()".formatted(step), equalTo(1));
+    }
+
     @When("she creates the workflow")
     public void sheCreatesTheWorkflow() {
         acted = true;
@@ -106,6 +146,23 @@ public class CreateWorkflowSteps {
                 .post(draft + "/steps")
                 .then()
                 .statusCode(200);
+    }
+
+    private void addFinalValidation() {
+        asSofia()
+                .body(Map.of("type", "FINAL_VALIDATION"))
+                .post(draft + "/steps")
+                .then()
+                .statusCode(200);
+    }
+
+    private String stepId(String name) {
+        return asSofia()
+                .get(draft)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("steps.find { it.name == '%s' }.id".formatted(name));
     }
 
     private RequestSpecification asSofia() {

@@ -60,7 +60,6 @@ Feature: Create workflow
       Then "Validação da chefia" can be returned for "Preenchido incorretamente" only
       And it can be rejected for "Pedido não autorizado" only
 
-  @wip
   Rule: Steps can be edited, moved, removed or added, and the final validation is always last
     # open question: can the request step «Pedido» ever be removed or moved? The prototype says no.
 

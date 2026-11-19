@@ -18,6 +18,10 @@ record Step(String id, StepType type, String name, String handledBy, Integer dea
         return new Step(newId(), StepType.REVIEW, name, handledBy, deadline);
     }
 
+    static Step finalValidation() {
+        return new Step(newId(), StepType.FINAL_VALIDATION, "Validação final", null, null);
+    }
+
     private static String newId() {
         return UUID.randomUUID().toString();
     }
