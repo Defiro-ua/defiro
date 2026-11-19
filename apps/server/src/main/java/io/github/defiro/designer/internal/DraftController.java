@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /** The drafts a Workflow Manager designs, one change at a time. Each answer is the whole draft. */
+// Only a Workflow Manager designs workflows: the app role that identity turns into a role.
+@PreAuthorize("hasRole('WorkflowManager')")
 @RestController
 @RequestMapping("/api/designer/drafts")
 class DraftController {

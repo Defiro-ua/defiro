@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /** The workflows created from drafts, as «Workflows» lists them. */
+// Only a Workflow Manager designs workflows: the app role that identity turns into a role.
+@PreAuthorize("hasRole('WorkflowManager')")
 @RestController
 @RequestMapping("/api/designer/workflows")
 class WorkflowController {

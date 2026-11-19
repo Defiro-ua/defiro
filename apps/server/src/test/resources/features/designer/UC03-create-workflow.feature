@@ -10,6 +10,19 @@ Feature: Create workflow
     Given Sofia Almeida is a Workflow Manager
     And she is designing the workflow "Ajudas de custo"
 
+  Rule: Only a Workflow Manager can design and create workflows
+    # The role is the app role «Workflow Manager» that UC01 reads from Entra ID.
+
+    Scenario: Someone who is not a Workflow Manager cannot start designing a workflow
+      Given Ana Ferreira is not a Workflow Manager
+      When she starts designing the workflow "Horas extraordinárias"
+      Then she is not allowed to
+
+    Scenario: Someone who is not a Workflow Manager cannot create a workflow
+      Given Ana Ferreira is not a Workflow Manager
+      When she tries to create the workflow Sofia Almeida is designing
+      Then she is not allowed to
+
   # Criteria 1, 2, 3 and 8 are about the screens, so they run in the UC03 browser journey.
   # open question: does the Definition of Done accept @browser rules that run only in the nightly journey?
   @browser

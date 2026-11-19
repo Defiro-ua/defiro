@@ -33,6 +33,7 @@ public class CreateWorkflowSteps {
     private static final String WORKFLOW_MANAGER = "WorkflowManager";
 
     private String authorization;
+    private String anaAuthorization;
     private Response response;
     private String draftId;
     private String draft;
@@ -47,6 +48,30 @@ public class CreateWorkflowSteps {
                 claims -> claims.subject("sofia.almeida")
                         .claim("name", "Sofia Almeida")
                         .claim("roles", List.of(WORKFLOW_MANAGER)));
+    }
+
+    @Given("Ana Ferreira is not a Workflow Manager")
+    public void anaFerreiraIsNotAWorkflowManager() {
+        anaAuthorization = bearer(
+                TRUSTED_KEY,
+                claims -> claims.subject("ana.ferreira")
+                        .claim("name", "Ana Ferreira")
+                        .claim("roles", List.of()));
+    }
+
+    @When("she starts designing the workflow {string}")
+    public void sheStartsDesigningTheWorkflow(String name) {
+        response = asAna().body(Map.of("name", name)).post("/api/designer/drafts");
+    }
+
+    @When("she tries to create the workflow Sofia Almeida is designing")
+    public void sheTriesToCreateTheWorkflowSofiaIsDesigning() {
+        response = asAna().body(Map.of("draft", draftId)).post("/api/designer/workflows");
+    }
+
+    @Then("she is not allowed to")
+    public void sheIsNotAllowedTo() {
+        response.then().statusCode(403);
     }
 
     @Given("she is designing the workflow {string}")
@@ -263,6 +288,10 @@ public class CreateWorkflowSteps {
                 .statusCode(200)
                 .extract()
                 .path("steps.find { it.name == '%s' }.id".formatted(name));
+    }
+
+    private RequestSpecification asAna() {
+        return given().header(HttpHeaders.AUTHORIZATION, anaAuthorization).contentType(ContentType.JSON);
     }
 
     private RequestSpecification asSofia() {
