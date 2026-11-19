@@ -38,6 +38,7 @@ public class CreateWorkflowSteps {
     private String draft;
     private boolean acted;
     private String lastStep;
+    private String created;
 
     @Given("Sofia Almeida is a Workflow Manager")
     public void sofiaAlmeidaIsAWorkflowManager() {
@@ -145,6 +146,45 @@ public class CreateWorkflowSteps {
     @Then("it can be rejected for {string} only")
     public void itCanBeRejectedForOnly(String reason) {
         assertReasons(lastStep, "REJECT", reason);
+    }
+
+    @Given("the workflow is complete")
+    public void theWorkflowIsComplete() {
+        giveReasons(
+                "Validação da chefia",
+                List.of(reason("Preenchido incorretamente", "RETURN"), reason("Pedido não autorizado", "REJECT")));
+    }
+
+    @Given("{string} was created")
+    public void wasCreated(String name) {
+        asSofia().body(Map.of("name", name)).patch(draft).then().statusCode(200);
+        theWorkflowIsComplete();
+        sheCreatesTheWorkflow();
+        created = response.then().statusCode(201).extract().path("id");
+    }
+
+    @When("she opens the list of workflows")
+    public void sheOpensTheListOfWorkflows() {
+        acted = true;
+        response = asSofia().get("/api/designer/workflows");
+    }
+
+    @Then("{string} is active as version {int}")
+    public void isActiveAsVersion(String name, int version) {
+        created = response.then().statusCode(201).extract().path("id");
+        String workflow = "find { it.id == '%s' }".formatted(created);
+        asSofia()
+                .get("/api/designer/workflows")
+                .then()
+                .statusCode(200)
+                .body(workflow + ".name", equalTo(name))
+                .body(workflow + ".version", equalTo(version))
+                .body(workflow + ".status", equalTo("ACTIVE"));
+    }
+
+    @Then("{string} is listed")
+    public void isListed(String name) {
+        response.then().statusCode(200).body("find { it.id == '%s' }.name".formatted(created), equalTo(name));
     }
 
     @When("she creates the workflow")

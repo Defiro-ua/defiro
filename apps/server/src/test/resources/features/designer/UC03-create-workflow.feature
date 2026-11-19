@@ -1,6 +1,5 @@
 # Draft for team review: the examples come from the acceptance criteria of issue #27 and the
 # messages of the web prototype (apps/web/src/domain/designer.ts). No Example Mapping was run yet.
-# Each rule stays @wip until the Designer API does what it says: the pipeline skips those.
 @UC03
 Feature: Create workflow
   As a Workflow Manager,
@@ -89,7 +88,6 @@ Feature: Create workflow
       When she creates the workflow
       Then it is refused with "Dê um nome ao workflow." on the workflow's name
 
-  @wip
   Rule: Creating a complete workflow makes it active, with the notice «Workflow criado»
 
     Scenario: Creating a complete workflow
@@ -97,7 +95,6 @@ Feature: Create workflow
       When she creates the workflow
       Then "Ajudas de custo" is active as version 1
 
-  @wip
   Rule: The new workflow appears in «Workflows» and in «Novo pedido» for the people allowed to request it
     # open question: «Novo pedido» belongs to UC13 (Engine); that part is tested once UC13 exists.
 
