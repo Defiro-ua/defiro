@@ -181,6 +181,87 @@ class WorkflowDraftTest {
         assertThat(path(moved)).containsExactly("Pedido", "Validação da chefia", "Validação final");
     }
 
+    @Test
+    void returnAndRejectReasonsAreKeptApart() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo").with(review("Validação da chefia"));
+
+        WorkflowDraft changed = draft.withReasons(
+                idOf(draft, "Validação da chefia"),
+                List.of(
+                        new Reason("Preenchido incorretamente", Outcome.RETURN),
+                        new Reason("Pedido não autorizado", Outcome.REJECT)));
+
+        assertThat(changed.steps().get(1).reasons())
+                .containsExactly(
+                        new Reason("Preenchido incorretamente", Outcome.RETURN),
+                        new Reason("Pedido não autorizado", Outcome.REJECT));
+    }
+
+    @Test
+    void aCompleteReviewStepHasNoProblems() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo").with(complete("Validação da chefia"));
+
+        assertThat(draft.problems()).isEmpty();
+    }
+
+    @Test
+    void aReviewStepWithNoReasonsIsAProblemOfThatStep() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo")
+                .with(complete("Validação da chefia"))
+                .with(review("Verificação financeira"));
+
+        assertThat(draft.problems())
+                .containsExactly(
+                        new Problem(
+                                "steps[2].reasons",
+                                "Passo 3 («Verificação financeira»): acrescente pelo menos um motivo para devolver ou rejeitar."));
+    }
+
+    @Test
+    void aReasonWithNoNameIsAProblemOfThatReason() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo").with(review("Validação da chefia"));
+        draft = draft.withReasons(
+                idOf(draft, "Validação da chefia"),
+                List.of(new Reason("Preenchido incorretamente", Outcome.RETURN), new Reason(" ", Outcome.REJECT)));
+
+        assertThat(draft.problems())
+                .containsExactly(new Problem(
+                        "steps[1].reasons[1].name", "Passo 2 («Validação da chefia»): dê um nome ao motivo 2."));
+    }
+
+    @Test
+    void aReviewStepNeedsANameSomeoneToHandleItAndADeadline() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo").with(Step.review("", null, null));
+        draft = draft.withReasons(
+                draft.steps().get(1).id(), List.of(new Reason("Pedido não autorizado", Outcome.REJECT)));
+
+        assertThat(draft.problems())
+                .containsExactly(
+                        new Problem("steps[1].name", "Passo 2: falta o nome."),
+                        new Problem("steps[1].handledBy", "Passo 2: escolha quem trata."),
+                        new Problem("steps[1].deadline", "Passo 2: indique o prazo legal, em dias úteis."));
+    }
+
+    @Test
+    void theFinalValidationNeedsTheSameAnswersAsAReviewStep() {
+        WorkflowDraft draft = WorkflowDraft.named("Ajudas de custo").with(Step.finalValidation());
+
+        assertThat(draft.problems())
+                .containsExactly(
+                        new Problem("steps[1].handledBy", "Passo 2 («Validação final»): escolha quem trata."),
+                        new Problem(
+                                "steps[1].deadline",
+                                "Passo 2 («Validação final»): indique o prazo legal, em dias úteis."),
+                        new Problem(
+                                "steps[1].reasons",
+                                "Passo 2 («Validação final»): acrescente pelo menos um motivo para devolver ou rejeitar."));
+    }
+
+    /** A review step with every answer: who handles it, a deadline and a reason. */
+    static Step complete(String name) {
+        return review(name).withReasons(List.of(new Reason("Pedido não autorizado", Outcome.REJECT)));
+    }
+
     static String idOf(WorkflowDraft draft, String name) {
         return draft.steps().stream()
                 .filter(step -> step.name().equals(name))

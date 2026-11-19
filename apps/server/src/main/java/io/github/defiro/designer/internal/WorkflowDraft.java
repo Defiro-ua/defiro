@@ -53,11 +53,56 @@ record WorkflowDraft(String name, List<Step> steps) {
         return new WorkflowDraft(name, path);
     }
 
+    WorkflowDraft withReasons(String stepId, List<Reason> reasons) {
+        List<Step> path = steps.stream()
+                .map(step -> step.id().equals(stepId) ? step.withReasons(reasons) : step)
+                .toList();
+        return new WorkflowDraft(name, path);
+    }
+
+    /** Every missing or invalid answer, in the order the Workflow Manager meets them. */
     List<Problem> problems() {
-        if (name == null || name.isBlank()) {
-            return List.of(new Problem("name", "Dê um nome ao workflow."));
+        List<Problem> problems = new ArrayList<>();
+        if (isBlank(name)) {
+            problems.add(new Problem("name", "Dê um nome ao workflow."));
         }
-        return List.of();
+        for (int k = 0; k < steps.size(); k++) {
+            if (steps.get(k).type() != StepType.REQUEST) {
+                problems.addAll(problemsOfStep(k));
+            }
+        }
+        return problems;
+    }
+
+    private List<Problem> problemsOfStep(int k) {
+        Step step = steps.get(k);
+        String field = "steps[" + k + "]";
+        String where = "Passo " + (k + 1) + (isBlank(step.name()) ? "" : " («" + step.name() + "»)") + ": ";
+        List<Problem> problems = new ArrayList<>();
+        if (isBlank(step.name())) {
+            problems.add(new Problem(field + ".name", where + "falta o nome."));
+        }
+        if (isBlank(step.handledBy())) {
+            problems.add(new Problem(field + ".handledBy", where + "escolha quem trata."));
+        }
+        if (step.deadline() == null) {
+            problems.add(new Problem(field + ".deadline", where + "indique o prazo legal, em dias úteis."));
+        }
+        if (step.reasons().isEmpty()) {
+            problems.add(new Problem(
+                    field + ".reasons", where + "acrescente pelo menos um motivo para devolver ou rejeitar."));
+        }
+        for (int j = 0; j < step.reasons().size(); j++) {
+            if (isBlank(step.reasons().get(j).name())) {
+                problems.add(new Problem(
+                        field + ".reasons[" + j + "].name", where + "dê um nome ao motivo " + (j + 1) + "."));
+            }
+        }
+        return problems;
+    }
+
+    private static boolean isBlank(String text) {
+        return text == null || text.isBlank();
     }
 
     private int indexOf(String stepId) {

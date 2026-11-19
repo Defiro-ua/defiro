@@ -37,6 +37,7 @@ public class CreateWorkflowSteps {
     private String draftId;
     private String draft;
     private boolean acted;
+    private String lastStep;
 
     @Given("Sofia Almeida is a Workflow Manager")
     public void sofiaAlmeidaIsAWorkflowManager() {
@@ -119,10 +120,42 @@ public class CreateWorkflowSteps {
                 .body("steps.findAll { it.name == '%s' }.size()".formatted(step), equalTo(1));
     }
 
+    @Given("the step {string} has no reasons")
+    public void theStepHasNoReasons(String step) {
+        giveReasons(step, List.of());
+    }
+
+    @Given("the step {string} has a return reason with no name")
+    public void theStepHasAReturnReasonWithNoName(String step) {
+        giveReasons(step, List.of(reason("", "RETURN")));
+    }
+
+    @When("she gives {string} the return reason {string} and the reject reason {string}")
+    public void sheGivesTheReasons(String step, String returnReason, String rejectReason) {
+        acted = true;
+        giveReasons(step, List.of(reason(returnReason, "RETURN"), reason(rejectReason, "REJECT")));
+    }
+
+    @Then("{string} can be returned for {string} only")
+    public void canBeReturnedForOnly(String step, String reason) {
+        lastStep = step;
+        assertReasons(step, "RETURN", reason);
+    }
+
+    @Then("it can be rejected for {string} only")
+    public void itCanBeRejectedForOnly(String reason) {
+        assertReasons(lastStep, "REJECT", reason);
+    }
+
     @When("she creates the workflow")
     public void sheCreatesTheWorkflow() {
         acted = true;
         response = asSofia().body(Map.of("draft", draftId)).post("/api/designer/workflows");
+    }
+
+    @Then("it is refused with {string}")
+    public void itIsRefusedWith(String message) {
+        response.then().statusCode(422).body("errors.message", hasItem(message));
     }
 
     @Then("it is refused with {string} on the workflow's name")
@@ -146,6 +179,33 @@ public class CreateWorkflowSteps {
                 .post(draft + "/steps")
                 .then()
                 .statusCode(200);
+    }
+
+    /** Gives the step these reasons, adding the step first, complete, if the path does not have it. */
+    private void giveReasons(String step, List<Map<String, String>> reasons) {
+        if (stepId(step) == null) {
+            addReviewStep(step, "Chefias da unidade do requerente", 5);
+        }
+        asSofia()
+                .body(reasons)
+                .put(draft + "/steps/" + stepId(step) + "/reasons")
+                .then()
+                .statusCode(200);
+    }
+
+    private void assertReasons(String step, String outcome, String reason) {
+        asSofia()
+                .get(draft)
+                .then()
+                .statusCode(200)
+                .body(
+                        "steps.find { it.name == '%s' }.reasons.findAll { it.outcome == '%s' }.name"
+                                .formatted(step, outcome),
+                        contains(reason));
+    }
+
+    private static Map<String, String> reason(String name, String outcome) {
+        return Map.of("name", name, "outcome", outcome);
     }
 
     private void addFinalValidation() {

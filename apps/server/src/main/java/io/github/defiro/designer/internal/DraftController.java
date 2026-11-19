@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -68,6 +69,11 @@ class DraftController {
     @PostMapping("/{id}/steps/{stepId}/move")
     DraftView moveStep(@PathVariable UUID id, @PathVariable String stepId, @RequestBody Move move) {
         return change(id, draft -> draft.move(stepId, move.direction()));
+    }
+
+    @PutMapping("/{id}/steps/{stepId}/reasons")
+    DraftView giveReasons(@PathVariable UUID id, @PathVariable String stepId, @RequestBody List<Reason> reasons) {
+        return change(id, draft -> draft.withReasons(stepId, reasons));
     }
 
     @DeleteMapping("/{id}/steps/{stepId}")

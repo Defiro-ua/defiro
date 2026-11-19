@@ -42,7 +42,6 @@ Feature: Create workflow
       When she adds the review step "Validação da chefia" handled by "Chefias da unidade do requerente" with a deadline of 5 working days
       Then the path is "Pedido", "Validação da chefia"
 
-  @wip
   Rule: Each step needs at least one reason, every reason needs a name, and return and reject reasons are separate
 
     Scenario: A step with no reasons cannot be created
