@@ -1,6 +1,7 @@
 package io.github.defiro.designer.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import io.github.defiro.TestcontainersConfiguration;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 // The versions of each workflow live in the Designer, as the team decided; the Engine keeps only
 // the procedures (instances), and reads the version in force through PublishedWorkflows.
@@ -33,6 +36,9 @@ class WorkflowVersionsIT {
 
     @Autowired
     Drafts drafts;
+
+    @Autowired
+    JdbcClient jdbc;
 
     UUID workflow;
 
@@ -106,6 +112,31 @@ class WorkflowVersionsIT {
                         each.workflow().equals(workflow) || each.workflow().equals(other))
                 .extracting(PublishedWorkflow::workflow, PublishedWorkflow::version)
                 .containsExactlyInAnyOrder(tuple(workflow, 2), tuple(other, 1));
+    }
+
+    @Test
+    void aPublishedVersionCannotBeChanged() {
+        versions.add(workflow, 1, specification("Ajudas de custo"), SOFIA);
+
+        assertThatThrownBy(() -> jdbc.sql(
+                                "update designer.workflow_version set published_by_name = 'Outra pessoa' where workflow = :workflow")
+                        .param("workflow", workflow)
+                        .update())
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("Uma versão publicada nunca muda");
+        assertThat(versions.find(workflow, 1)).contains(specification("Ajudas de custo"));
+    }
+
+    @Test
+    void aPublishedVersionCannotBeDeleted() {
+        versions.add(workflow, 1, specification("Ajudas de custo"), SOFIA);
+
+        assertThatThrownBy(() -> jdbc.sql("delete from designer.workflow_version where workflow = :workflow")
+                        .param("workflow", workflow)
+                        .update())
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("Uma versão publicada nunca muda");
+        assertThat(published.latest(workflow)).isPresent();
     }
 
     UUID newWorkflow() {
