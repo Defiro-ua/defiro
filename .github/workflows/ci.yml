@@ -190,17 +190,13 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
 
       # The @browser scenarios open the web app in Chromium (Playwright): the server under test serves
-      # this build, as nginx does in production.
+      # this build, as nginx does in production. Playwright for Java downloads its Chromium on its first
+      # run; the runner image already has the system libraries Chrome needs.
       - name: Build the web app
         working-directory: apps/web
         run: |
           npm ci --ignore-scripts
           npm run build
-
-      # The same Playwright version as apps/server/pom.xml, so the browser is the one the tests expect.
-      - name: Install Chromium
-        working-directory: apps/web
-        run: npx --yes playwright@1.64.0 install --with-deps chromium
 
       # Testcontainers uses the runner's Docker. Failed tests are never re-run: a flaky test is a defect.
       - name: Run integration tests

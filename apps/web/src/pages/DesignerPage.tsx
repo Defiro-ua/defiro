@@ -288,9 +288,8 @@ function Designer({ id, draft: first, types }: Loaded) {
               onChange={() => pick(g.nome)}
               className={cx(radioClass, 'mt-0.5')}
             />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-[16px] leading-[22px] font-semibold">{g.nome}</span>
-              <span className="text-label-sm leading-[18px] text-ink-3">{g.nota}</span>
+            <span className="text-[16px] leading-[22px] font-semibold">
+              {g.nome} <span className="mt-0.5 block text-label-sm leading-[18px] font-normal text-ink-3">{g.nota}</span>
             </span>
           </label>
         ))}
