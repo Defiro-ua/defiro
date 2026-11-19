@@ -3,7 +3,7 @@ package io.github.defiro.designer.internal;
 import io.github.defiro.registry.PluginCatalogue;
 import io.github.defiro.spec.PluginRef;
 import java.net.URI;
-import java.security.Principal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.ClaimAccessor;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,14 +46,27 @@ class DraftController {
 
     record NewDraft(String name) {}
 
-    record DraftView(UUID id, int revision, String name, List<Step> steps, Integer publishedVersion) {
+    /**
+     * A draft as the browser sees it. Once published: the version, who published it (by name) and
+     * when, for «Workflows» to show «Versão N · criado por … a …».
+     */
+    record DraftView(
+            UUID id,
+            int revision,
+            String name,
+            List<Step> steps,
+            Integer publishedVersion,
+            String publishedBy,
+            Instant publishedAt) {
         DraftView(StoredDraft stored) {
             this(
                     stored.id(),
                     stored.revision(),
                     stored.draft().name(),
                     stored.draft().steps(),
-                    stored.publishedVersion());
+                    stored.published() == null ? null : stored.published().version(),
+                    stored.published() == null ? null : stored.published().byName(),
+                    stored.published() == null ? null : stored.published().at());
         }
     }
 
@@ -78,8 +93,9 @@ class DraftController {
     }
 
     @PostMapping("/{id}/publish")
-    ResponseEntity<Map<String, Integer>> publish(@PathVariable UUID id, Principal publishedBy) {
-        int version = publisher.publish(id, publishedBy.getName()).orElseThrow(DraftController::notFound);
+    ResponseEntity<Map<String, Integer>> publish(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
+        Publisher.Who who = new Publisher.Who(user.getClaimAsString("sub"), user.getClaimAsString("name"));
+        int version = publisher.publish(id, who).orElseThrow(DraftController::notFound);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("version", version));
     }
 

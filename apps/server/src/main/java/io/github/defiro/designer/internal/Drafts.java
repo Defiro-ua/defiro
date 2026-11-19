@@ -2,6 +2,7 @@ package io.github.defiro.designer.internal;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,7 +14,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Repository
 class Drafts {
 
-    private static final String COLUMNS = "id, revision, content, published_version";
+    private static final String COLUMNS =
+            "id, revision, content, published_version, published_by, published_by_name, published_at";
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
@@ -55,12 +57,15 @@ class Drafts {
                 .list();
     }
 
-    void markPublished(UUID id, int revision, int version) {
-        jdbc.sql("update designer.draft set published_revision = :revision, published_version = :version"
-                        + " where id = :id")
+    /** Marks the draft as published at this revision, as this version, by this person, now. */
+    void markPublished(UUID id, int revision, int version, Publisher.Who who) {
+        jdbc.sql("update designer.draft set published_revision = :revision, published_version = :version,"
+                        + " published_by = :by, published_by_name = :byName, published_at = now() where id = :id")
                 .param("id", id)
                 .param("revision", revision)
                 .param("version", version)
+                .param("by", who.id())
+                .param("byName", who.name())
                 .update();
     }
 
@@ -69,6 +74,18 @@ class Drafts {
                 row.getObject("id", UUID.class),
                 row.getInt("revision"),
                 json.readValue(row.getString("content"), WorkflowDraft.class),
-                row.getObject("published_version", Integer.class));
+                published(row));
+    }
+
+    private static Published published(ResultSet row) throws SQLException {
+        Integer version = row.getObject("published_version", Integer.class);
+        if (version == null) {
+            return null;
+        }
+        return new Published(
+                version,
+                row.getString("published_by"),
+                row.getString("published_by_name"),
+                row.getObject("published_at", OffsetDateTime.class).toInstant());
     }
 }

@@ -31,8 +31,15 @@ class Publisher {
         this.deployment = deployment;
     }
 
+    /**
+     * Who publishes: the stable id of their account, and their name as it is now.
+     *
+     * @param id the subject of their token, which the Engine records as publishedBy
+     */
+    record Who(String id, String name) {}
+
     /** The version the Engine gave, or empty if there is no such draft. */
-    Optional<Integer> publish(UUID id, String publishedBy) {
+    Optional<Integer> publish(UUID id, Who who) {
         return drafts.find(id).map(stored -> {
             WorkflowDraft draft = stored.draft();
             Set<PluginRef> plugins =
@@ -44,8 +51,8 @@ class Publisher {
             int version = deployment.deploy(
                     draft.specification(
                             plugin -> catalogue.find(plugin).orElseThrow().outcomes()),
-                    new Publication(publishedBy, id, stored.revision()));
-            drafts.markPublished(id, stored.revision(), version);
+                    new Publication(who.id(), id, stored.revision()));
+            drafts.markPublished(id, stored.revision(), version, who);
             return version;
         });
     }

@@ -6,6 +6,6 @@ import java.util.UUID;
  * A draft as the Designer store keeps it.
  *
  * @param revision how many times it was saved, starting at 1
- * @param publishedVersion the Engine's version of its last published revision, or null
+ * @param published its last publication, or null if it was never published
  */
-record StoredDraft(UUID id, int revision, WorkflowDraft draft, Integer publishedVersion) {}
+record StoredDraft(UUID id, int revision, WorkflowDraft draft, Published published) {}

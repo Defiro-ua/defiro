@@ -3,8 +3,11 @@ package io.github.defiro.designer.internal;
 import static io.github.defiro.designer.internal.WorkflowDraftTest.complete;
 import static io.github.defiro.designer.internal.WorkflowDraftTest.withSteps;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import io.github.defiro.TestcontainersConfiguration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +27,7 @@ class DraftsIT {
 
         assertThat(drafts.find(added.id())).contains(added);
         assertThat(added.revision()).isEqualTo(1);
-        assertThat(added.publishedVersion()).isNull();
+        assertThat(added.published()).isNull();
     }
 
     @Test
@@ -45,12 +48,23 @@ class DraftsIT {
     }
 
     @Test
-    void aPublishedDraftKeepsTheVersionTheEngineGave() {
+    void aPublishedDraftKeepsTheVersionTheEngineGaveAndWhoPublishedItWhen() {
         UUID id = drafts.add(withSteps(complete("Validação da chefia"))).id();
 
-        drafts.markPublished(id, 1, 3);
+        drafts.markPublished(id, 1, 3, new Publisher.Who("sofia.almeida", "Sofia Almeida"));
 
-        assertThat(drafts.find(id).orElseThrow().publishedVersion()).isEqualTo(3);
+        Published published = drafts.find(id).orElseThrow().published();
+        assertThat(published.version()).isEqualTo(3);
+        assertThat(published.by()).isEqualTo("sofia.almeida");
+        assertThat(published.byName()).isEqualTo("Sofia Almeida");
+        assertThat(published.at()).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
         assertThat(drafts.all()).extracting(StoredDraft::id).contains(id);
+    }
+
+    @Test
+    void aDraftNeverPublishedHasNoPublication() {
+        UUID id = drafts.add(withSteps()).id();
+
+        assertThat(drafts.find(id).orElseThrow().published()).isNull();
     }
 }
