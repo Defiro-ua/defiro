@@ -1,3 +1,5 @@
+import { csrfHeader } from './http'
+
 /** Items of the side menu the server allows this person to see. */
 export type MenuItem = 'create-workflow' | 'new-request' | 'inbox' | 'workflows'
 
@@ -29,14 +31,8 @@ export async function signOut(): Promise<string> {
   const response = await fetch('/logout', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'X-XSRF-TOKEN': cookie('XSRF-TOKEN') },
+    headers: csrfHeader(),
   })
   if (!response.ok) throw new Error(`POST /logout answered ${response.status}`)
   return response.url
-}
-
-function cookie(name: string): string {
-  const prefix = `${name}=`
-  const found = document.cookie.split('; ').find((c) => c.startsWith(prefix))
-  return found ? decodeURIComponent(found.slice(prefix.length)) : ''
 }
