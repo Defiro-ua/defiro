@@ -130,7 +130,7 @@ Feature: Add notes to a document
     @browser
     Scenario: Deleting a note asks first
       When Rui Matos chooses «Apagar» on his note on "Regresso"
-      Then he is asked «Apagar a nota sobre «Regresso»? A Ana deixa de a ver se devolver o pedido.», with «Apagar a nota» and «Cancelar»
+      Then he is asked «Apagar a nota sobre «Regresso»? Ana Ferreira deixa de a ver se devolver o pedido.», with «Apagar a nota» and «Cancelar»
 
   Rule: Until the reviewer decides, their notes are theirs alone
     # Decision with Pedro (2026-11-22). Releasing the task discards them.
