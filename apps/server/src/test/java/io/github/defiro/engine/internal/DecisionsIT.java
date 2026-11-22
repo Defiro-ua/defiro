@@ -11,7 +11,9 @@ import io.github.defiro.spec.PluginRef;
 import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.Transition;
 import io.github.defiro.spec.WorkflowSpecification;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +44,9 @@ class DecisionsIT {
 
     @Autowired
     JdbcClient jdbc;
+
+    static final RequestData.Requester ANA = new RequestData.Requester(
+            "ana", "Ana Ferreira", "Técnica Superior", "Divisão de Obras Municipais", "Rui Matos");
 
     final String reference = "IT-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -93,6 +98,29 @@ class DecisionsIT {
     }
 
     @Test
+    void anApprovalIsNoLongerUndoneOnceTheRequestCameBackAndWasApprovedAgain() {
+        StepSpecification first = step("Validação da chefia", "review");
+        StepSpecification second = step("Verificação financeira", "final-validation");
+        ProcedureSeed.Submitted submitted = submit(step("Pedido", "submission"), first, second);
+        decisions.approve(submitted.task(), person("rui"));
+        // Corrected and resubmitted (UC18, UC20): back to the first review, where Segunda approves
+        ProcedureSeed.Resubmitted resubmitted = seed.resubmit(submitted, ANA, List.of(), Map.of(), first);
+        UUID secondsNextTask = decisions
+                .approve(resubmitted.request().task(), person("segunda"))
+                .orElseThrow()
+                .nextTask();
+
+        assertThatThrownBy(() -> decisions.undo(submitted.task(), person("rui")))
+                .isInstanceOf(NoLongerUndoableException.class);
+        assertThat(jdbc.sql("select status from engine.task where id = :id")
+                        .param("id", secondsNextTask)
+                        .query(String.class)
+                        .single())
+                .as("the task Segunda's approval opened")
+                .isEqualTo("open");
+    }
+
+    @Test
     void thereIsNoDecisionOnAnUnknownTask() {
         assertThat(decisions.approve(UUID.randomUUID(), person("carla"))).isEmpty();
     }
@@ -129,26 +157,23 @@ class DecisionsIT {
                 .isEqualTo(1);
     }
 
-    private ProcedureSeed.Submitted submit(StepSpecification request, StepSpecification review) {
+    private ProcedureSeed.Submitted submit(StepSpecification request, StepSpecification... reviews) {
+        List<StepSpecification> steps = new ArrayList<>(List.of(request));
+        steps.addAll(List.of(reviews));
+        // As the Designer gives them: approved goes on, returned goes back to the request.
+        List<Transition> transitions = new ArrayList<>();
+        transitions.add(new Transition(request.id(), "submitted", reviews[0].id()));
+        for (int k = 1; k < steps.size(); k++) {
+            String next = k + 1 < steps.size() ? steps.get(k + 1).id() : null;
+            transitions.add(new Transition(steps.get(k).id(), "approved", next));
+            transitions.add(new Transition(steps.get(k).id(), "returned", request.id()));
+            transitions.add(new Transition(steps.get(k).id(), "rejected", null));
+        }
         UUID draft = UUID.randomUUID();
-        List<Transition> transitions = List.of(
-                new Transition(request.id(), "submitted", review.id()),
-                new Transition(review.id(), "approved", null),
-                new Transition(review.id(), "returned", request.id()),
-                new Transition(review.id(), "rejected", null));
         int version = deployment.deploy(
-                new WorkflowSpecification(
-                        WorkflowSpecification.SCHEMA_VERSION, "Ajudas de custo", List.of(request, review), transitions),
+                new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, "Ajudas de custo", steps, transitions),
                 new Publication("sofia", draft, 1));
-        return seed.submit(
-                reference,
-                draft,
-                version,
-                request.id(),
-                review,
-                new RequestData.Requester(
-                        "ana", "Ana Ferreira", "Técnica Superior", "Divisão de Obras Municipais", "Rui Matos"),
-                List.of());
+        return seed.submit(reference, draft, version, request.id(), reviews[0], ANA, List.of());
     }
 
     private static StepSpecification step(String name, String plugin) {

@@ -24,6 +24,7 @@ class Decisions {
     static final String APPROVED = "approved";
     static final String MOVED = "moved";
     static final String UNDONE = "undone";
+    private static final String NEXT_TASK = "nextTask";
 
     private final Tasks tasks;
     private final Procedures procedures;
@@ -68,18 +69,23 @@ class Decisions {
         if (!tasks.decide(task.id(), APPROVED)) {
             throw alreadyDecided(task);
         }
+        String to = next(specification, step.id(), APPROVED);
+        StepSpecification next = to == null ? null : Inbox.step(specification, to);
+        UUID nextTask = null;
+        if (next == null) {
+            procedures.close(procedure.id());
+        } else {
+            procedures.moveTo(procedure.id(), next.id());
+            nextTask = tasks.open(procedure.id(), next);
+        }
+        // The approval keeps the task it opened: undoing it withdraws that task, and no other.
         Map<String, Object> details = who(person);
         details.put("step", step.name());
+        details.put(NEXT_TASK, nextTask == null ? null : nextTask.toString());
         auditLog.append(person.id(), procedure.id(), APPROVED, "task", task.id(), details);
-
-        String to = next(specification, step.id(), APPROVED);
-        if (to == null) {
-            procedures.close(procedure.id());
+        if (next == null) {
             return new Approved(task.id(), procedure.reference(), null, null, null);
         }
-        StepSpecification next = Inbox.step(specification, to);
-        procedures.moveTo(procedure.id(), next.id());
-        UUID nextTask = tasks.open(procedure.id(), next);
         Map<String, Object> moved = new LinkedHashMap<>();
         moved.put("step", next.name());
         moved.put("handledBy", next.handledBy());
@@ -101,11 +107,9 @@ class Decisions {
     }
 
     private Undone undo(Task task, Person person) {
-        boolean approvedByThisPerson = APPROVED.equals(task.decision())
-                && auditLog.last(APPROVED, task.id())
-                        .map(approval -> person.id().equals(approval.actor()))
-                        .orElse(false);
-        if (!approvedByThisPerson) {
+        Optional<AuditLog.Entry> approval =
+                APPROVED.equals(task.decision()) ? auditLog.last(APPROVED, task.id()) : Optional.empty();
+        if (approval.isEmpty() || !person.id().equals(approval.get().actor())) {
             throw new NotAllowedException();
         }
         Procedure procedure = procedures.find(task.procedure()).orElseThrow();
@@ -117,11 +121,10 @@ class Decisions {
             procedures.reopen(procedure.id());
         } else {
             StepSpecification next = Inbox.step(specification, to);
-            Optional<Tasks.OpenTask> nextTask = tasks.openOf(procedure.id()).stream()
-                    .filter(open -> open.step().equals(next.id()))
-                    .findFirst();
-            // Withdrawn only if still open: nobody may act on it in the meantime.
-            if (nextTask.isEmpty() || !tasks.withdraw(nextTask.get().id())) {
+            // Only the task this approval opened, and only while still open: once someone acted on
+            // it, or the request went back and on again, the approval stays.
+            Object nextTask = approval.get().details().get(NEXT_TASK);
+            if (nextTask == null || !tasks.withdraw(UUID.fromString(nextTask.toString()))) {
                 throw new NoLongerUndoableException(next.name());
             }
         }
