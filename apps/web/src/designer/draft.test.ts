@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { canMove, changeDraft, problemsOf, totalDeadline, type Draft, type Step } from './draft'
+import { canMove, canMoveField, changeDraft, fieldProblem, problemsOf, totalDeadline, type Draft, type Field, type Step } from './draft'
 
 const submission = { name: 'submission', version: '0.1.0' }
 const review = { name: 'review', version: '0.1.0' }
 const finalValidation = { name: 'final-validation', version: '0.1.0' }
+
+const question = (id: string, label: string, more: Partial<Field> = {}): Field => ({
+  id,
+  label,
+  type: 'short-text',
+  required: true,
+  options: [],
+  ...more,
+})
+
+const material = question('material', 'Material pedido')
+const NL = String.fromCharCode(10)
 
 const request: Step = {
   id: 'pedido',
@@ -13,6 +25,7 @@ const request: Step = {
   deadline: null,
   returnReasons: [],
   rejectReasons: [],
+  fields: [material],
 }
 
 function reviewStep(id: string, name: string): Step {
@@ -24,6 +37,7 @@ function reviewStep(id: string, name: string): Step {
     deadline: 5,
     returnReasons: ['Preenchido incorretamente'],
     rejectReasons: ['Pedido não autorizado'],
+    fields: [],
   }
 }
 
@@ -46,6 +60,7 @@ describe('changing a draft', () => {
       deadline: null,
       returnReasons: ['Preenchido incorretamente'],
       rejectReasons: ['Pedido não autorizado'],
+      fields: [],
     })
   })
 
@@ -161,6 +176,74 @@ describe('the problems of a draft', () => {
       { field: 'steps[1].returnReasons[0]', message: 'Passo 2 («Validação da chefia»): dê um nome ao motivo de devolução 1.' },
       { field: 'steps[1].rejectReasons[1]', message: 'Passo 2 («Validação da chefia»): dê um nome ao motivo de rejeição 2.' },
     ])
+  })
+})
+
+const asking = (...fields: Field[]): Draft => {
+  const d = draft(reviewStep('a', 'Validação da chefia'))
+  return { ...d, steps: [{ ...request, fields }, ...d.steps.slice(1)] }
+}
+const labels = (d: Draft) => d.steps[0].fields.map((f) => f.label)
+
+describe('the questions of the request form', () => {
+  it('adds a question at the end: a short text, optional, to be named on its own screen', () => {
+    const d = changeDraft(asking(material), { t: 'addField', id: 'q2' })
+
+    expect(d.steps[0].fields).toEqual([material, { id: 'q2', label: '', type: 'short-text', required: false, options: [] }])
+  })
+
+  it('changes the label, the answer type and whether it is mandatory', () => {
+    let d = changeDraft(asking(material), { t: 'field', field: 'material', patch: { label: 'Transporte' } })
+    d = changeDraft(d, { t: 'field', field: 'material', patch: { type: 'single-choice', required: false } })
+
+    expect(d.steps[0].fields[0]).toEqual({ ...material, label: 'Transporte', type: 'single-choice', required: false })
+  })
+
+  it('takes the options of a single choice one per line, keeping the line being written', () => {
+    const d = changeDraft(asking(question('t', 'Transporte', { type: 'single-choice' })), { t: 'options', field: 't', v: 'Carro' + NL + 'Comboio' + NL })
+
+    expect(d.steps[0].fields[0].options).toEqual(['Carro', 'Comboio', ''])
+  })
+
+  it('moves a question up or down, and says which moves the form allows', () => {
+    const d = asking(question('a', 'Local da deslocação'), question('b', 'Transporte'))
+
+    expect(labels(changeDraft(d, { t: 'moveField', field: 'b', by: -1 }))).toEqual(['Transporte', 'Local da deslocação'])
+    expect(labels(changeDraft(d, { t: 'moveField', field: 'a', by: -1 }))).toEqual(labels(d))
+    expect(labels(changeDraft(d, { t: 'moveField', field: 'b', by: 1 }))).toEqual(labels(d))
+    expect([canMoveField(d, 'a', -1), canMoveField(d, 'a', 1), canMoveField(d, 'b', -1), canMoveField(d, 'b', 1)]).toEqual([false, true, true, false])
+  })
+
+  it('removes a question', () => {
+    const d = asking(question('a', 'Local da deslocação'), question('b', 'Transporte'))
+
+    expect(labels(changeDraft(d, { t: 'removeField', field: 'a' }))).toEqual(['Transporte'])
+  })
+
+  it('asks the requester at least one question, as the server does', () => {
+    expect(problemsOf(asking())).toEqual([
+      {
+        field: 'steps[0].fields',
+        message: 'Formulário do pedido: ainda não tem perguntas para quem faz o pedido… crie pelo menos uma pergunta, por exemplo «Material pedido»',
+      },
+    ])
+  })
+
+  it('asks each question for a label and a single choice for two options, as the server does', () => {
+    const d = asking(material, question('q2', ' '), question('q3', 'Transporte', { type: 'single-choice', options: ['Carro', ' '] }))
+
+    expect(problemsOf(d)).toEqual([
+      { field: 'steps[0].fields[1].label', message: 'Formulário do pedido, campo 2: falta o rótulo.' },
+      { field: 'steps[0].fields[2].options', message: 'Formulário do pedido, campo 3 («Transporte»): faltam opções de resposta (pelo menos duas).' },
+    ])
+    expect(problemsOf(asking(question('q3', 'Transporte', { type: 'single-choice', options: ['Carro', 'Comboio'] })))).toEqual([])
+  })
+
+  it('says in a few words what is wrong with a question, for the list of questions', () => {
+    expect(fieldProblem(question('q', ''))).toBe('Falta o rótulo')
+    expect(fieldProblem(question('q', 'Transporte', { type: 'single-choice', options: ['Carro'] }))).toBe('Faltam opções de resposta (pelo menos duas)')
+    expect(fieldProblem(question('q', 'Transporte', { type: 'single-choice', options: ['Carro', 'Comboio'] }))).toBe('')
+    expect(fieldProblem(material)).toBe('')
   })
 })
 

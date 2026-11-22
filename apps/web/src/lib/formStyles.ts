@@ -27,3 +27,11 @@ export function enterMovesOn(e: KeyboardEvent, next: () => void, blockInputs = f
   if (blockInputs && tag === 'INPUT') return
   next()
 }
+
+/** The small and medium buttons of the designer's lists */
+export const secondarySmall =
+  'box-border inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-pill border-emph border-field bg-bg px-4 text-[14px] font-semibold text-ink hover:bg-soft'
+export const primarySmall =
+  'box-border inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-pill border-0 bg-brand px-4 text-[14px] font-semibold text-on-brand hover:brightness-107'
+export const secondaryMedium =
+  'box-border inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border-emph border-field bg-bg px-5.5 text-[15px] font-semibold text-ink hover:bg-soft'

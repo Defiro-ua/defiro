@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Draft, Step } from './draft'
-import { domId, kindOf, numberOf, ofPath, screenOfField, screenOrder } from './screens'
+import { domId, isScreen, kindOf, numberOf, ofForm, ofPath, screenOfField, screenOrder } from './screens'
 
 const step = (id: string, plugin: string): Step => ({
   id,
@@ -10,17 +10,26 @@ const step = (id: string, plugin: string): Step => ({
   deadline: null,
   returnReasons: [],
   rejectReasons: [],
+  fields: [],
 })
 
-const draft: Draft = { name: 'Ajudas de custo', steps: [step('pedido', 'submission'), step('a', 'review'), step('f', 'final-validation')] }
+const request: Step = { ...step('pedido', 'submission'), fields: [{ id: 'q1', label: 'Material pedido', type: 'short-text', required: true, options: [] }] }
+const draft: Draft = { name: 'Ajudas de custo', steps: [request, step('a', 'review'), step('f', 'final-validation')] }
 
 describe('the designer screens', () => {
-  it('go through the name, who can request, three screens per step, the path and the review', () => {
-    expect(screenOrder(draft)).toEqual(['ident', 'quem', 'pn:a', 'pp:a', 'pm:a', 'pn:f', 'pp:f', 'pm:f', 'percurso', 'rever'])
+  it('go through the name, who can request, three screens per step, the path, the request form and the review', () => {
+    expect(screenOrder(draft)).toEqual(['ident', 'quem', 'pn:a', 'pp:a', 'pm:a', 'pn:f', 'pp:f', 'pm:f', 'percurso', 'campos', 'rever'])
   })
 
-  it('are numbered out of four, the steps counting as the path', () => {
-    expect(['ident', 'quem', 'pn:a', 'pm:a', 'percurso', 'rever'].map((s) => numberOf(kindOf(s).kind))).toEqual([1, 2, 3, 3, 3, 4])
+  it('open each question on its own screen, from the request form', () => {
+    expect(isScreen(draft, 'campo:q1')).toBe(true)
+    expect(isScreen(draft, 'campo:gone')).toBe(false)
+    expect(isScreen(draft, 'pn:a')).toBe(true)
+    expect(isScreen(draft, 'pn:gone')).toBe(false)
+  })
+
+  it('are numbered out of five, the steps counting as the path and the questions as the form', () => {
+    expect(['ident', 'quem', 'pn:a', 'pm:a', 'percurso', 'campos', 'campo:q1', 'rever'].map((s) => numberOf(kindOf(s).kind))).toEqual([1, 2, 3, 3, 3, 4, 4, 5])
   })
 
   it('know which screen answers each field of a problem', () => {
@@ -32,6 +41,14 @@ describe('the designer screens', () => {
     expect(screenOfField(draft, 'steps[2].rejectReasons[0]')).toBe('pm:f')
     expect(screenOfField(draft, 'steps')).toBe('percurso')
     expect(screenOfField(draft, 'steps[9].name')).toBe('percurso')
+    expect(screenOfField(draft, 'steps[0].fields')).toBe('campos')
+    expect(screenOfField(draft, 'steps[0].fields[0].label')).toBe('campo:q1')
+    expect(screenOfField(draft, 'steps[0].fields[3].options')).toBe('campos')
+    expect(screenOfField(draft, 'steps[1].fields')).toBe('campos')
+  })
+
+  it('tell the request form screens apart', () => {
+    expect(['campos', 'campo:q1', 'percurso', 'rever'].map(ofForm)).toEqual([true, true, false, false])
   })
 
   it('tell the path screens apart', () => {

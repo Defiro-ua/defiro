@@ -93,7 +93,7 @@ record WorkflowDraft(String name, List<Step> steps) {
                         step.deadline(),
                         step.returnReasons(),
                         step.rejectReasons(),
-                        step.fields()))
+                        published(step.fields())))
                 .toList();
         List<Transition> transitions = new ArrayList<>();
         String request = steps.getFirst().id();
@@ -110,6 +110,26 @@ record WorkflowDraft(String name, List<Step> steps) {
             }
         }
         return new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, name, path, transitions);
+    }
+
+    /**
+     * The questions as the request form shows them: a single choice offers the options written, and
+     * no other answer type has options, whatever the draft still keeps from an earlier type.
+     */
+    private static List<FieldSpecification> published(List<FieldSpecification> fields) {
+        return fields.stream()
+                .map(question -> new FieldSpecification(
+                        question.id(),
+                        question.label(),
+                        question.type(),
+                        question.required(),
+                        FieldSpecification.SINGLE_CHOICE.equals(question.type())
+                                ? question.options().stream()
+                                        .filter(option -> !isBlank(option))
+                                        .map(String::trim)
+                                        .toList()
+                                : List.of()))
+                .toList();
     }
 
     private boolean startsWithTheOnlyRequest() {

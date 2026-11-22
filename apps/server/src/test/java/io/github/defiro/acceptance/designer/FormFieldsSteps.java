@@ -33,6 +33,7 @@ public class FormFieldsSteps {
 
     @Then("the form shows {string}, {string} and {string} from the profile, and she cannot change them")
     public void theFormShowsFromTheProfile(String name, String unit, String manager) {
+        assertThat(screen().profileRows()).hasCount(3);
         assertThat(screen().profileRows()).containsText(new String[] {name, unit, manager});
         assertThat(screen().profileRows().first()).containsText("Do perfil (IdP)");
         assertThat(screen().profileRows().getByRole(AriaRole.BUTTON)).hasCount(0);
@@ -103,6 +104,7 @@ public class FormFieldsSteps {
             designer.saveDraft();
             openTheForm();
         }
+        assertThat(screen().requesterRows()).hasCount(2);
         assertThat(screen().requesterRows()).containsText(new String[] {first, second});
     }
 
@@ -120,6 +122,7 @@ public class FormFieldsSteps {
 
     @Then("the request form asks {string} only")
     public void theRequestFormAsksOnly(String label) {
+        assertThat(screen().requesterRows()).hasCount(1);
         assertThat(screen().requesterRows()).containsText(new String[] {label});
     }
 

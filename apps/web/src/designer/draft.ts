@@ -1,6 +1,40 @@
 /** A plugin at one version: what a step of a workflow runs (the Registry's catalogue) */
 export type PluginRef = { name: string; version: string }
 
+/** The answer types of a question (docs/workflow-specification.md) */
+export type FieldType = 'short-text' | 'long-text' | 'number' | 'date' | 'date-time' | 'single-choice' | 'yes-no' | 'files'
+
+/** One question of the request form (UC04): name, unit and manager are never questions, they come from the profile */
+export type Field = {
+  id: string
+  /** The question, as the requester reads it */
+  label: string
+  type: FieldType
+  required: boolean
+  /** The answers to choose from, one per line as written, for a single choice */
+  options: string[]
+}
+
+/** The cards of the answer types, in the order the designer shows them */
+export const answerTypes: Array<{ type: FieldType; name: string; example: string }> = [
+  { type: 'short-text', name: 'Texto curto', example: 'Uma linha. Ex.: local, matrícula' },
+  { type: 'long-text', name: 'Texto longo', example: 'Várias linhas. Ex.: justificação' },
+  { type: 'number', name: 'Número', example: 'Só algarismos. Ex.: quantidade' },
+  { type: 'date', name: 'Data', example: 'Dia, mês e ano' },
+  { type: 'date-time', name: 'Data e hora', example: 'Dia, mês, ano e hora' },
+  { type: 'single-choice', name: 'Escolha única', example: 'Uma de várias opções que define' },
+  { type: 'yes-no', name: 'Sim ou não', example: 'Duas opções: sim ou não' },
+  { type: 'files', name: 'Ficheiros', example: 'Documentos que o requerente junta' },
+]
+
+/** How a question is named in the lists: by its label, or as a question with none */
+export const fieldTitle = (q: Field) => q.label.trim() || 'Campo sem rótulo'
+
+export const answerTypeName = (type: FieldType) => answerTypes.find((a) => a.type === type)?.name ?? type
+
+/** What the form fills in from the requester's profile (the IdP): shown, never asked */
+export const profileFields = ['Nome', 'Unidade orgânica', 'Chefia direta']
+
 /** One step of the path, as the Designer keeps it (GET and PUT /api/designer/drafts/{id}) */
 export type Step = {
   id: string
@@ -12,6 +46,8 @@ export type Step = {
   deadline: number | null
   returnReasons: string[]
   rejectReasons: string[]
+  /** The questions of the request form; only the request has them */
+  fields: Field[]
 }
 
 export type Draft = { name: string; steps: Step[] }
@@ -35,6 +71,11 @@ export type DraftChange =
   | { t: 'addReason'; step: string; list: ReasonList }
   | { t: 'renameReason'; step: string; list: ReasonList; index: number; v: string }
   | { t: 'removeReason'; step: string; list: ReasonList; index: number }
+  | { t: 'addField'; id: string }
+  | { t: 'field'; field: string; patch: Partial<Omit<Field, 'id' | 'options'>> }
+  | { t: 'options'; field: string; v: string }
+  | { t: 'moveField'; field: string; by: -1 | 1 }
+  | { t: 'removeField'; field: string }
 
 export const isRequest = (s: Step) => s.plugin.name === REQUEST
 export const isFinalValidation = (s: Step) => s.plugin.name === FINAL_VALIDATION
@@ -43,6 +84,8 @@ export const isFinalValidation = (s: Step) => s.plugin.name === FINAL_VALIDATION
 export function changeDraft(d: Draft, c: DraftChange): Draft {
   const steps = d.steps
   const update = (id: string, f: (s: Step) => Step) => ({ ...d, steps: steps.map((s) => (s.id === id ? f(s) : s)) })
+  const form = (f: (fields: Field[]) => Field[]) => ({ ...d, steps: steps.map((s) => (isRequest(s) ? { ...s, fields: f(s.fields) } : s)) })
+  const question = (id: string, f: (q: Field) => Field) => form((fields) => fields.map((q) => (q.id === id ? f(q) : q)))
   switch (c.t) {
     case 'name':
       return { ...d, name: c.v }
@@ -64,6 +107,16 @@ export function changeDraft(d: Draft, c: DraftChange): Draft {
       return update(c.step, (s) => ({ ...s, [c.list]: s[c.list].map((r, i) => (i === c.index ? c.v : r)) }))
     case 'removeReason':
       return update(c.step, (s) => ({ ...s, [c.list]: s[c.list].filter((_, i) => i !== c.index) }))
+    case 'addField':
+      return form((fields) => [...fields, { id: c.id, label: '', type: 'short-text', required: false, options: [] }])
+    case 'field':
+      return question(c.field, (q) => ({ ...q, ...c.patch }))
+    case 'options':
+      return question(c.field, (q) => ({ ...q, options: c.v.split(/\r?\n/) }))
+    case 'moveField':
+      return form((fields) => movedField(fields, c.field, c.by))
+    case 'removeField':
+      return form((fields) => fields.filter((q) => q.id !== c.field))
   }
 }
 
@@ -80,6 +133,7 @@ function withStep(steps: Step[], id: string, plugin: PluginRef): Step[] {
     deadline: null,
     returnReasons: ['Preenchido incorretamente'],
     rejectReasons: ['Pedido não autorizado'],
+    fields: [],
   }
   const at = final >= 0 ? final : steps.length
   return [...steps.slice(0, at), step, ...steps.slice(at)]
@@ -97,6 +151,49 @@ function moved(steps: Step[], id: string, by: -1 | 1): Step[] {
 }
 
 export const canMove = (steps: Step[], id: string, by: -1 | 1) => moved(steps, id, by) !== steps
+
+function movedField(fields: Field[], id: string, by: -1 | 1): Field[] {
+  const from = fields.findIndex((q) => q.id === id)
+  const to = from + by
+  if (from < 0 || to < 0 || to >= fields.length) return fields
+  const form = [...fields]
+  ;[form[from], form[to]] = [form[to], form[from]]
+  return form
+}
+
+export const canMoveField = (d: Draft, id: string, by: -1 | 1) => {
+  const fields = d.steps.find(isRequest)?.fields ?? []
+  return movedField(fields, id, by) !== fields
+}
+
+/** What is wrong with a question, in a few words for the list of questions; empty when nothing is */
+export function fieldProblem(q: Field): string {
+  if (blank(q.label)) return 'Falta o rótulo'
+  if (q.type === 'single-choice' && q.options.filter((o) => !blank(o)).length < 2) return 'Faltam opções de resposta (pelo menos duas)'
+  return ''
+}
+
+const FORM = 'Formulário do pedido'
+
+/** The request form asks at least one question, and each has a label and, for a single choice, two options */
+function problemsOfForm(fields: Field[]): Problem[] {
+  if (!fields.length)
+    return [
+      {
+        field: 'steps[0].fields',
+        message: `${FORM}: ainda não tem perguntas para quem faz o pedido… crie pelo menos uma pergunta, por exemplo «Material pedido»`,
+      },
+    ]
+  return fields.flatMap((q, j) => {
+    const at = `steps[0].fields[${j}]`
+    const where = `${FORM}, campo ${j + 1}${blank(q.label) ? '' : ` («${q.label}»)`}: `
+    const problems: Problem[] = []
+    if (blank(q.label)) problems.push({ field: `${at}.label`, message: where + 'falta o rótulo.' })
+    if (q.type === 'single-choice' && q.options.filter((o) => !blank(o)).length < 2)
+      problems.push({ field: `${at}.options`, message: where + 'faltam opções de resposta (pelo menos duas).' })
+    return problems
+  })
+}
 
 const blank = (text: string | null | undefined) => !text || !text.trim()
 
@@ -124,6 +221,8 @@ export function problemsOf(d: Draft): Problem[] {
     unnamed('returnReasons', 'devolução')
     unnamed('rejectReasons', 'rejeição')
   })
+  const request = d.steps.find(isRequest)
+  if (request) problems.push(...problemsOfForm(request.fields))
   return problems
 }
 

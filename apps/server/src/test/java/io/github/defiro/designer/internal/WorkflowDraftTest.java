@@ -305,6 +305,20 @@ class WorkflowDraftTest {
         assertThat(WorkflowDraft.from(file)).isEqualTo(draft);
     }
 
+    @Test
+    void theWorkflowFileKeepsOnlyTheOptionsWrittenAndOnlyForASingleChoice() {
+        WorkflowDraft draft = asking(
+                new FieldSpecification("q1", "Transporte", "single-choice", true, List.of("Carro", " ", "Comboio", "")),
+                new FieldSpecification("q2", "Local", "short-text", true, List.of("left from a single choice")));
+
+        List<FieldSpecification> questions =
+                draft.specification(OUTCOMES::get).steps().getFirst().fields();
+
+        assertThat(questions)
+                .extracting(FieldSpecification::options)
+                .containsExactly(List.of("Carro", "Comboio"), List.of());
+    }
+
     /** "Ajudas de custo": the request, then these steps. */
     static WorkflowDraft withSteps(Step... steps) {
         return named("Ajudas de custo", steps);

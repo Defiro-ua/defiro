@@ -7,8 +7,10 @@ import { ArrowHint, FieldError, Req, StepError, WizardFooter } from '../componen
 import { Icon } from '../components/Icon'
 import { WizardLayout } from '../components/layout/WizardLayout'
 import {
+  answerTypeName,
   canMove,
   changeDraft,
+  fieldTitle,
   FINAL_VALIDATION,
   isFinalValidation,
   isRequest,
@@ -23,19 +25,13 @@ import {
   type Step,
 } from '../designer/draft'
 import { groups } from '../designer/groups'
-import { domId, kindOf, numberOf, ofPath, screenOfField, screenOrder, SCREENS } from '../designer/screens'
+import { domId, isScreen, kindOf, numberOf, ofForm, ofPath, screenOfField, screenOrder, SCREENS } from '../designer/screens'
 import { cx } from '../lib/cx'
 import { focusSoon } from '../lib/focus'
-import { cardClass, describedBy, enterMovesOn, inputClass, radioClass } from '../lib/formStyles'
+import { cardClass, describedBy, enterMovesOn, inputClass, primarySmall, radioClass, secondaryMedium, secondarySmall } from '../lib/formStyles'
 import { useProfile } from '../lib/useProfile'
 import { paths } from '../routes'
-
-const secondarySmall =
-  'box-border inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-pill border-emph border-field bg-bg px-4 text-[14px] font-semibold text-ink hover:bg-soft'
-const primarySmall =
-  'box-border inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-pill border-0 bg-brand px-4 text-[14px] font-semibold text-on-brand hover:brightness-107'
-const secondaryMedium =
-  'box-border inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border-emph border-field bg-bg px-5.5 text-[15px] font-semibold text-ink hover:bg-soft'
+import { FieldEditor, FieldList } from './RequestFormScreens'
 
 const stepName = (s: Step) => s.name || 'Passo sem nome'
 
@@ -108,15 +104,23 @@ function Designer({ id, draft: first, types }: Loaded) {
   const request = steps[0]
   const decisions = steps.filter((s) => !isRequest(s))
   const order = screenOrder(draft)
-  const known = order.includes(view) ? view : 'percurso'
+  const known = isScreen(draft, view) ? view : 'percurso'
   const { kind, step: stepId } = kindOf(known)
-  const step = steps.find((s) => s.id === stepId) || null
+  const step = kind === 'campo' ? null : steps.find((s) => s.id === stepId) || null
   const k = step ? steps.indexOf(step) : -1
+  const fields = request?.fields ?? []
+  const editing = kind === 'campo' ? fields.find((q) => q.id === stepId) || null : null
 
   const local = problemsOf(draft)
   const problems = [...local, ...refused.filter((r) => !local.some((p) => p.field === r.field))]
   const screenOf = (field: string) => screenOfField(draft, field)
-  const visible = problems.filter((p) => triedAll || tried.has(screenOf(p.field)) || (tried.has('percurso') && ofPath(screenOf(p.field))))
+  const visible = problems.filter(
+    (p) =>
+      triedAll || tried.has(screenOf(p.field)) || (tried.has('percurso') && ofPath(screenOf(p.field))) || (tried.has('campos') && ofForm(screenOf(p.field))),
+  )
+  /** What a screen answers: «Percurso» and «Formulário» answer their own screens too */
+  const answers = (screen: string) => (kind === 'percurso' ? ofPath(screen) : kind === 'campos' ? ofForm(screen) : screen === known)
+  const listScreen = kind === 'percurso' || kind === 'campos'
   const errorOf = (field: string) => visible.find((p) => p.field === field)?.message || ''
   const fieldState = (field: string, help?: string) => {
     const error = errorOf(field)
@@ -153,23 +157,25 @@ function Designer({ id, draft: first, types }: Loaded) {
     }
   }
 
-  const startSection = kind === 'ident' || kind === 'quem' || kind === 'percurso'
+  const startSection = kind === 'ident' || kind === 'quem' || kind === 'percurso' || kind === 'campos'
 
   async function next() {
     if (kind === 'rever') return create()
-    const mine = problems.filter((p) => (kind === 'percurso' ? ofPath(screenOf(p.field)) : screenOf(p.field) === known))
+    const mine = problems.filter((p) => answers(screenOf(p.field)))
     if (mine.length) {
-      setTried((t) => new Set(t).add(kind === 'percurso' ? 'percurso' : known))
-      focusSoon(kind === 'percurso' ? 'passo-erro' : domId(mine[0].field))
+      setTried((t) => new Set(t).add(listScreen ? kind : known))
+      focusSoon(listScreen ? 'passo-erro' : domId(mine[0].field))
       return
     }
     if (!(await save())) return
+    if (kind === 'campo') return go('campos', { focus: 'ed-' + stepId })
     if (volta === 'percurso' && (kind === 'pm' || kind === 'quem')) return go('percurso', { volta: '', focus: 'pc-' + (kind === 'quem' ? request.id : stepId) })
     if (fromReview && startSection) return go('rever', { fromReview: false })
     go(order[order.indexOf(known) + 1])
   }
 
   function previous() {
+    if (kind === 'campo') return go('campos', { focus: 'ed-' + stepId })
     if (fromReview && startSection) return go('rever', { fromReview: false })
     if (volta === 'percurso') {
       if (kind === 'pn' || kind === 'quem') return go('percurso', { volta: '', focus: 'pc-' + (kind === 'quem' ? request.id : stepId) })
@@ -213,6 +219,12 @@ function Designer({ id, draft: first, types }: Loaded) {
     go('pn:' + newId, { volta: 'percurso' })
   }
 
+  function addField() {
+    const newId = crypto.randomUUID()
+    change({ t: 'addField', id: newId })
+    go('campo:' + newId)
+  }
+
   // ——— the texts of each screen
   const questions: Record<string, { q: string; ajuda: string }> = {
     ident: { q: 'Como se chama o workflow?', ajuda: 'É o nome que os trabalhadores veem em «Novo pedido».' },
@@ -236,6 +248,11 @@ function Designer({ id, draft: first, types }: Loaded) {
       q: 'O percurso está completo?',
       ajuda: 'O pedido passa por estes passos, por esta ordem. Pode alterar um passo, mudar a ordem ou acrescentar outro no fim.',
     },
+    campos: { q: 'Que dados pede ao requerente?', ajuda: 'São as perguntas do formulário do pedido, por esta ordem. Acrescente um campo de cada vez.' },
+    campo: {
+      q: editing?.label.trim() ? `Como é o campo «${editing.label.trim()}»?` : 'Como é o novo campo?',
+      ajuda: 'O rótulo é a pergunta que o requerente vê. Escolha o tipo de resposta que espera.',
+    },
     rever: { q: 'Confira o workflow antes de o criar', ajuda: 'Pode alterar qualquer parte antes de criar.' },
   }
   const names: Record<string, string> = {
@@ -245,14 +262,16 @@ function Designer({ id, draft: first, types }: Loaded) {
     pp: 'prazo',
     pm: 'motivos',
     percurso: 'Percurso',
+    campos: 'Formulário',
+    campo: 'Formulário',
     rever: 'Rever e criar',
   }
   const kicker = [`Passo ${numberOf(kind)} de ${SCREENS}`, step ? `«${stepName(step)}»: ${names[kind]}` : names[kind]]
-  const pct = Math.round(((order.indexOf(known) + 1) / order.length) * 100)
+  const pct = Math.round(((order.indexOf(kind === 'campo' ? 'campos' : known) + 1) / order.length) * 100)
   const total = totalDeadline(draft)
 
   // ——— what stops the person at the top of the screen
-  const screenProblems = visible.filter((p) => (kind === 'percurso' ? tried.has('percurso') && ofPath(screenOf(p.field)) : screenOf(p.field) === known))
+  const screenProblems = visible.filter((p) => (listScreen ? tried.has(kind) : true) && answers(screenOf(p.field)))
   const incomplete = kind === 'percurso' && tried.has('percurso') ? decisions.filter((s) => !complete(s)) : []
   let stepError = ''
   if (saveFailed) stepError = 'Não foi possível guardar o rascunho. Tente outra vez.'
@@ -263,12 +282,15 @@ function Designer({ id, draft: first, types }: Loaded) {
         : `Ainda não pode criar o workflow: faltam corrigir ${problems.length} coisas, assinaladas abaixo.`
   else if (kind === 'percurso' && screenProblems.length)
     stepError = incomplete.length ? 'Para continuar, complete ' + (incomplete.length === 1 ? 'este passo:' : 'estes passos:') : screenProblems[0].message
+  else if (kind === 'campos' && screenProblems.length)
+    stepError = screenProblems.length === 1 ? screenProblems[0].message : `Para continuar, corrija as ${screenProblems.length} coisas assinaladas na lista.`
   else if (kind !== 'rever' && screenProblems.length)
     stepError =
       screenProblems.length === 1 ? 'Para continuar, corrija o que está assinalado.' : `Para continuar, corrija as ${screenProblems.length} coisas assinaladas.`
 
   let nextText = 'Continuar'
   if (kind === 'rever') nextText = 'Criar workflow'
+  else if (kind === 'campo') nextText = 'Guardar o campo'
   else if (kind === 'pm' && volta === 'percurso') nextText = 'Guardar o passo'
   else if (kind === 'quem' && volta === 'percurso') nextText = 'Guardar e voltar ao percurso'
   else if (fromReview && startSection) nextText = 'Guardar e voltar à revisão'
@@ -634,6 +656,10 @@ function Designer({ id, draft: first, types }: Loaded) {
         </p>
       </div>
     )
+  } else if (kind === 'campos') {
+    body = <FieldList draft={draft} fields={fields} change={change} open={(q) => go('campo:' + q)} add={addField} />
+  } else if (editing) {
+    body = <FieldEditor question={editing} at={`steps[0].fields[${fields.indexOf(editing)}]`} fieldState={fieldState} change={change} />
   } else if (kind === 'rever') {
     const section = (key: string, title: string, rows: Array<{ rot: string; v: string }>, owns: (screen: string) => boolean) => {
       const errors = triedAll ? problems.filter((p) => owns(screenOf(p.field))) : []
@@ -654,8 +680,8 @@ function Designer({ id, draft: first, types }: Loaded) {
             </button>
           </div>
           <dl className="m-0 grid grid-cols-[minmax(130px,220px)_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[15px] leading-[22px]">
-            {rows.map((r) => (
-              <div key={r.rot} className="contents">
+            {rows.map((r, i) => (
+              <div key={i + r.rot} className="contents">
                 <dt className="text-ink-2">{r.rot}</dt>
                 <dd className="m-0 [overflow-wrap:anywhere]">{r.v}</dd>
               </div>
@@ -682,6 +708,12 @@ function Designer({ id, draft: first, types }: Loaded) {
           })),
           ofPath,
         )}
+        {section(
+          'campos',
+          'Formulário do pedido',
+          fields.map((q) => ({ rot: fieldTitle(q), v: `${answerTypeName(q.type)} · ${q.required ? 'obrigatório' : 'opcional'}` })),
+          ofForm,
+        )}
         <p className="m-0 flex items-start gap-2 text-[15px] leading-[23px] text-ink-2">
           <Icon name="send" size={16} className="mt-0.5 text-accent-ink" />
           <span>
@@ -703,7 +735,7 @@ function Designer({ id, draft: first, types }: Loaded) {
             e.preventDefault()
             void next()
           }}
-          onKeyDown={(e) => enterMovesOn(e, () => void next(), kind === 'pm' || kind === 'percurso')}
+          onKeyDown={(e) => enterMovesOn(e, () => void next(), kind === 'pm' || listScreen)}
           className="flex min-w-0 flex-[999_1_560px] flex-col gap-7"
         >
           <div className="flex max-w-reading flex-col gap-3">
@@ -747,7 +779,7 @@ function Designer({ id, draft: first, types }: Loaded) {
             next={() => void next()}
             nextText={nextText}
             last={kind === 'rever'}
-            enterHint={kind !== 'pm' && kind !== 'percurso'}
+            enterHint={kind !== 'pm' && !listScreen}
           />
         </form>
 
