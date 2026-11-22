@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approve, fileUrl, listInbox, openRequest, release, take, undoApproval } from './engine'
+import { approve, deleteNote, fileField, fileUrl, listInbox, openRequest, release, saveNote, take, undoApproval } from './engine'
 
 function answer(status: number, body?: unknown) {
   const fetch = vi.fn().mockResolvedValue(new Response(body === undefined ? null : JSON.stringify(body), { status }))
@@ -89,6 +89,30 @@ describe('the Engine API', () => {
     const fetch = answer(200, { task: 't1', reference: 'AC-2026-0147' })
     await expect(release('t1')).resolves.toMatchObject({ done: true })
     expect(fetch.mock.calls[0][0]).toBe('/api/engine/tasks/t1/release')
+  })
+
+  it('writes a note on a field, and on a file by its key', async () => {
+    const note = { field: 'file:f1', label: 'fatura_hotel.pdf', text: 'Falta o certificado de presença com o carimbo da entidade formadora.' }
+    const fetch = answer(200, note)
+
+    await expect(saveNote('t1', fileField('f1'), note.text)).resolves.toEqual(note)
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('/api/engine/tasks/t1/notes/file%3Af1')
+    expect(init).toMatchObject({ method: 'PUT', body: JSON.stringify({ text: note.text }) })
+  })
+
+  it('deletes a note', async () => {
+    const fetch = answer(204)
+
+    await expect(deleteNote('t1', 'regresso')).resolves.toBeUndefined()
+    expect(fetch.mock.calls[0]).toEqual(['/api/engine/tasks/t1/notes/regresso', expect.objectContaining({ method: 'DELETE' })])
+  })
+
+  it('fails when a note is refused', async () => {
+    answer(422)
+    await expect(saveNote('t1', 'regresso', '')).rejects.toThrow('answered 422')
+    answer(403)
+    await expect(deleteNote('t1', 'regresso')).rejects.toThrow('answered 403')
   })
 
   it('fails when the server refuses the decision for another reason', async () => {
