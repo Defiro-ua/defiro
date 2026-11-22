@@ -136,11 +136,14 @@ class Decisions {
         return new Undone(task.id(), procedure.reference(), step.name());
     }
 
+    // Who acted first: who decided the task, or, when its task was withdrawn meanwhile, who undid
+    // the approval that had opened it.
     private AlreadyDecidedException alreadyDecided(Task task) {
-        Map<String, Object> decided =
-                auditLog.last(APPROVED, task.id()).map(AuditLog.Entry::details).orElse(Map.of());
-        return new AlreadyDecidedException(
-                String.valueOf(decided.get("name")), String.valueOf(decided.get("jobTitle")));
+        Map<String, Object> first = auditLog.last(APPROVED, task.id())
+                .or(() -> auditLog.latest(task.procedure(), UNDONE))
+                .map(AuditLog.Entry::details)
+                .orElse(Map.of());
+        return new AlreadyDecidedException(String.valueOf(first.get("name")), String.valueOf(first.get("jobTitle")));
     }
 
     private static String next(WorkflowSpecification specification, String step, String outcome) {

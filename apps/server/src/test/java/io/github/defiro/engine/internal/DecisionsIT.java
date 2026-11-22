@@ -121,6 +121,28 @@ class DecisionsIT {
     }
 
     @Test
+    void whenTheTaskWentAwayWithAnUndoneApprovalTheLateReviewerIsToldWhoUndidIt() {
+        StepSpecification second = step("Verificação financeira", "final-validation");
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação da chefia", "review"), second);
+        UUID next = decisions
+                .approve(submitted.task(), new Person("rui", "Rui Matos", "Chefe de Divisão", UNIT, List.of()))
+                .orElseThrow()
+                .nextTask();
+        decisions.undo(submitted.task(), new Person("rui", "Rui Matos", "Chefe de Divisão", UNIT, List.of()));
+        // As Carla had found the task just before the undo withdrew it: it is no longer open
+        jdbc.sql("insert into engine.task (id, procedure_id, step_id, status) values (:id, :procedure, :step, 'done')")
+                .param("id", next)
+                .param("procedure", submitted.procedure())
+                .param("step", second.id())
+                .update();
+
+        assertThatThrownBy(() -> decisions.approve(next, person("carla")))
+                .isInstanceOf(AlreadyDecidedException.class)
+                .hasMessage("Este pedido já foi tratado por Rui Matos, Chefe de Divisão.");
+    }
+
+    @Test
     void thereIsNoDecisionOnAnUnknownTask() {
         assertThat(decisions.approve(UUID.randomUUID(), person("carla"))).isEmpty();
     }

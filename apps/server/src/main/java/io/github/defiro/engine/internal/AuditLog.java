@@ -1,5 +1,7 @@
 package io.github.defiro.engine.internal;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -52,11 +54,18 @@ class AuditLog {
                         where action = :action and entity_id = :entity order by id desc limit 1""")
                 .param("action", action)
                 .param("entity", entity.toString())
-                .query((row, n) -> new Entry(
-                        row.getString("actor_id"),
-                        row.getString("action"),
-                        details(row.getString("details")),
-                        row.getObject("occurred_at", OffsetDateTime.class)))
+                .query(this::entry)
+                .optional();
+    }
+
+    /** The procedure's newest entry with this action. */
+    Optional<Entry> latest(UUID procedure, String action) {
+        return jdbc.sql("""
+                        select actor_id, action, details, occurred_at from engine.audit_log
+                        where procedure_id = :procedure and action = :action order by id desc limit 1""")
+                .param("procedure", procedure)
+                .param("action", action)
+                .query(this::entry)
                 .optional();
     }
 
@@ -64,14 +73,15 @@ class AuditLog {
     List<Entry> of(UUID procedure) {
         return jdbc.sql("""
                         select actor_id, action, details, occurred_at from engine.audit_log
-                        where procedure_id = :procedure order by occurred_at, id""")
-                .param("procedure", procedure)
-                .query((row, n) -> new Entry(
-                        row.getString("actor_id"),
-                        row.getString("action"),
-                        details(row.getString("details")),
-                        row.getObject("occurred_at", OffsetDateTime.class)))
-                .list();
+                        where procedure_id = :procedure order by occurred_at, id""").param("procedure", procedure).query(this::entry).list();
+    }
+
+    private Entry entry(ResultSet row, int n) throws SQLException {
+        return new Entry(
+                row.getString("actor_id"),
+                row.getString("action"),
+                details(row.getString("details")),
+                row.getObject("occurred_at", OffsetDateTime.class));
     }
 
     private Map<String, Object> details(String stored) {
