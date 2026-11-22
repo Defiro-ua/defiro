@@ -12,6 +12,7 @@ import io.github.defiro.FakeEntraId.Account;
 import io.github.defiro.acceptance.Browser;
 import io.restassured.response.Response;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -59,8 +60,17 @@ public class IdentitySteps {
                         row.get("unit"),
                         row.get("job title"),
                         row.get("manager"),
-                        appRoleValue(row.get("app role"))))
+                        appRoleValue(row.get("app role")),
+                        groups(row.get("groups"))))
                 .toList());
+    }
+
+    // The groups column, when a feature has it, lists the group names separated by commas.
+    private static List<String> groups(String names) {
+        if (names == null || names.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(names.split(",")).map(String::strip).toList();
     }
 
     @When("{person} chooses to sign in")

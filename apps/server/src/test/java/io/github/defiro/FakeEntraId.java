@@ -64,7 +64,8 @@ public final class FakeEntraId {
             this(name, unit, jobTitle, manager, appRole, List.of());
         }
 
-        String id() {
+        /** The person's object id, which tokens carry as {@code oid} and {@code sub}. */
+        public String id() {
             return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)).toString();
         }
     }
