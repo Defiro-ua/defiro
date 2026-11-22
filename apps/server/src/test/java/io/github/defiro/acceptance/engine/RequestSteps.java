@@ -56,6 +56,7 @@ public class RequestSteps {
     private final Map<String, UUID> fileIds = new HashMap<>();
     private Submitted request;
     private String requester;
+    private String reference;
     private String waitingAt;
     private List<Answer> answers;
     private StepSpecification firstReview;
@@ -86,7 +87,7 @@ public class RequestSteps {
                 new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, name, steps, transitions(steps));
         UUID draft = UUID.randomUUID();
         // Published by the Workflow Manager of the mockup.
-        String publishedBy = entraId.account("Sofia Almeida").id();
+        String publishedBy = FakeEntraId.idOf("Sofia Almeida");
         int version = deployment.deploy(specification, new Publication(publishedBy, draft, 1));
         workflows.put(name, new Deployed(draft, version, specification));
     }
@@ -110,6 +111,7 @@ public class RequestSteps {
                 requesterOf(account),
                 this.answers);
         requester = person;
+        this.reference = reference;
         waitingAt = firstReview.name();
     }
 
@@ -138,6 +140,11 @@ public class RequestSteps {
     public void withTheFiles(String file, String otherFile) {
         attach(file);
         attach(otherFile);
+    }
+
+    /** The reference of the submitted request. */
+    String reference() {
+        return reference;
     }
 
     /** Who submitted the request. */
@@ -213,6 +220,11 @@ public class RequestSteps {
             }
         }
         return transitions;
+    }
+
+    /** The key of a field of the request, by its label; «Unidade orgânica» is Entra ID's unit. */
+    static String fieldOf(String label) {
+        return "Unidade orgânica".equals(label) ? "unit" : field(label);
     }
 
     private static String field(String label) {

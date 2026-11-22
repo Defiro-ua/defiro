@@ -70,7 +70,7 @@ public final class FakeEntraId {
 
         /** The person's object id, which tokens carry as {@code oid} and {@code sub}. */
         public String id() {
-            return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)).toString();
+            return idOf(name);
         }
     }
 
@@ -133,6 +133,11 @@ public final class FakeEntraId {
             throw new IllegalArgumentException("No account in the fake Entra ID for " + name);
         }
         return account;
+    }
+
+    /** The object id of the person with this name, whether or not the directory has them now. */
+    public static String idOf(String name) {
+        return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     /** The object id Entra ID gives the group with this name; tokens carry it, not the name. */

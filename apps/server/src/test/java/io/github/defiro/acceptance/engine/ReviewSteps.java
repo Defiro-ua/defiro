@@ -304,6 +304,33 @@ public class ReviewSteps {
         }
     }
 
+    // For the other step classes of the review stories (NoteSteps)
+
+    /** The person's browser, signed in. */
+    io.github.defiro.acceptance.Browser browserOf(String person) {
+        return people.of(person);
+    }
+
+    /** The task the request waits at, as the Background left it. */
+    UUID waitingTask() {
+        return taskOf(requests.waitingAt());
+    }
+
+    /** Who took the task last. */
+    String taker() {
+        return taker;
+    }
+
+    /** The answer to the last request a When step made here. */
+    Response lastResponse() {
+        return response;
+    }
+
+    /** The request as this person sees it now. */
+    JsonPath requestSeenBy(String person) {
+        return requestAs(person);
+    }
+
     private UUID taskOf(String step) {
         if (tasks.isEmpty()) {
             tasks.put(requests.waitingAt(), requests.task());
