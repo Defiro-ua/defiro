@@ -223,10 +223,10 @@ describe('«Rever pedido» (UC17)', () => {
     expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument()
   })
 
-  it('does not open for someone who takes no part in it, nor for an unknown reference', async () => {
-    vi.mocked(api.openRequest).mockResolvedValue({ found: false, status: 403 })
+  it.each([403, 404] as const)('does not tell someone who takes no part in it that the request exists (%i)', async (status) => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: false, status })
     openAt('/pedidos/AC-2026-0147')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não participa neste pedido')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não há nenhum pedido AC-2026-0147.')
   })
 
   it('says so when the request cannot be read', async () => {

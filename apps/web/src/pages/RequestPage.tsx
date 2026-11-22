@@ -55,7 +55,8 @@ export function RequestPage() {
       )}
       {opened !== null && opened !== 'failed' && !opened.found && (
         <p role="alert" className="m-0 font-semibold text-error">
-          {opened.status === 403 ? 'Não participa neste pedido, por isso não o pode abrir.' : `Não há nenhum pedido ${reference}.`}
+          {/* Who takes no part in it must not learn that it exists */}
+          Não há nenhum pedido {reference}.
         </p>
       )}
       {opened !== null && opened !== 'failed' && opened.found && <Review request={opened.request} onRefused={setNotice} />}
@@ -224,16 +225,13 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                 A sua decisão
               </h2>
               {/* UC18: returning and rejecting arrive with it */}
-              <div className="flex flex-col gap-2.5" role="group" aria-label="Decisão" aria-describedby="decisao-em-breve">
+              <div className="flex flex-col gap-2.5" role="group" aria-label="Decisão">
                 <Button variant="secondary" icon="reset" className="w-full" disabled>
                   Devolver para correção
                 </Button>
                 <Button variant="secondary" icon="x" className="w-full" disabled>
                   Rejeitar o pedido
                 </Button>
-                <span id="decisao-em-breve" className="text-center text-label-sm leading-[19px] text-ink-3">
-                  Devolver e rejeitar: disponível em breve.
-                </span>
                 <Button id="btn-aprovar" size="l" icon="check" iconSize={20} disabled={approving} onClick={() => approveIt(r.task as string)}>
                   Aprovar
                 </Button>
