@@ -46,7 +46,8 @@ class DesignerAccessIT {
                 "POST   | " + DRAFT + "/publish      | {}",
                 "GET    | /api/designer/step-types   | {}",
                 "GET    | " + DRAFT + "/specification | {}",
-                "POST   | /api/designer/drafts/import | {}"
+                "POST   | /api/designer/drafts/import | {}",
+                "GET    | /api/designer/groups       | {}"
             })
     void someoneWithoutTheWorkflowManagerRoleIsRefused(String method, String path, String body) throws Exception {
         String employee = bearer(TRUSTED_KEY, claims -> claims.claim("roles", List.of()));
@@ -59,7 +60,12 @@ class DesignerAccessIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, " + DRAFT, "GET, /api/designer/drafts", "GET, /api/designer/step-types"})
+    @CsvSource({
+        "GET, " + DRAFT,
+        "GET, /api/designer/drafts",
+        "GET, /api/designer/step-types",
+        "GET, /api/designer/groups"
+    })
     void aWorkflowManagerGetsPastTheCheck(String method, String path) throws Exception {
         String workflowManager = bearer(TRUSTED_KEY, claims -> claims.claim("roles", List.of("WorkflowManager")));
 

@@ -55,8 +55,12 @@ record WorkflowDraft(String name, List<Step> steps) {
         return new WorkflowDraft(file.name(), path);
     }
 
-    /** Every missing or invalid answer, in the order the Workflow Manager meets them. */
-    List<Problem> problems(Set<PluginRef> catalogue) {
+    /**
+     * Every missing or invalid answer, in the order the Workflow Manager meets them.
+     *
+     * @param groups who can make the request and who can handle a step (UC05)
+     */
+    List<Problem> problems(Set<PluginRef> catalogue, Groups groups) {
         List<Problem> problems = new ArrayList<>();
         if (isBlank(name)) {
             problems.add(new Problem("name", "Dê um nome ao workflow."));
@@ -69,7 +73,7 @@ record WorkflowDraft(String name, List<Step> steps) {
                     "steps", "A validação final fecha o procedimento: só pode haver uma e tem de ser o último passo."));
         }
         for (int k = 0; k < steps.size(); k++) {
-            problems.addAll(problemsOfStep(k, catalogue));
+            problems.addAll(problemsOfStep(k, catalogue, groups));
         }
         if (!steps.isEmpty()) {
             problems.addAll(problemsOfForm(steps.getFirst().fields()));
@@ -141,7 +145,7 @@ record WorkflowDraft(String name, List<Step> steps) {
         return finals == 0 || (finals == 1 && is(steps.getLast(), FINAL_VALIDATION));
     }
 
-    private List<Problem> problemsOfStep(int k, Set<PluginRef> catalogue) {
+    private List<Problem> problemsOfStep(int k, Set<PluginRef> catalogue, Groups groups) {
         Step step = steps.get(k);
         String field = "steps[" + k + "]";
         String where = "Passo " + (k + 1) + (isBlank(step.name()) ? "" : " («" + step.name() + "»)") + ": ";
@@ -153,8 +157,13 @@ record WorkflowDraft(String name, List<Step> steps) {
         if (isBlank(step.name())) {
             problems.add(new Problem(field + ".name", where + "falta o nome."));
         }
+        List<String> offered = is(step, SUBMISSION) ? groups.requesters() : groups.handlers();
         if (isBlank(step.handledBy())) {
             problems.add(new Problem(field + ".handledBy", where + "escolha quem trata."));
+        } else if (!offered.contains(step.handledBy())) {
+            problems.add(new Problem(
+                    field + ".handledBy",
+                    where + "«" + step.handledBy() + "» não é um grupo nem uma unidade da organização."));
         }
         if (!is(step, SUBMISSION)) {
             problems.addAll(problemsOfDecision(step, field, where));
