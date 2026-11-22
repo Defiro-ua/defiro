@@ -282,7 +282,11 @@ public class CreateWorkflowSteps {
 
     @Then("«Workflows» lists {string} as version {int}")
     public void workflowsListsAsVersion(String name, int version) {
-        assertThat(screen.workflow(name)).containsText("Versão " + version);
+        // Other scenarios may have left drafts of the same name, still to create
+        assertThat(screen.workflow(name)
+                        .filter(new Locator.FilterOptions().setHasText("Versão " + version + " "))
+                        .first())
+                .isVisible();
     }
 
     /** The draft's path is these steps: built through the API before any When, then checked. */

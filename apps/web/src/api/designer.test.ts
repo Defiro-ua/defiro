@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { listDrafts, listStepTypes, loadDraft, publishDraft, saveDraft, startDraft, type StoredDraft } from './designer'
+import { importDraft, listDrafts, listStepTypes, loadDraft, publishDraft, saveDraft, specificationUrl, startDraft, type StoredDraft } from './designer'
 
 const stored: StoredDraft = {
   id: 'd1',
@@ -73,10 +73,33 @@ describe('the Designer API', () => {
     await expect(listStepTypes()).resolves.toEqual(types)
   })
 
+  it('loads a workflow file as it is, as a new draft', async () => {
+    document.cookie = 'XSRF-TOKEN=token-2'
+    const fetch = answer(201, stored)
+
+    await expect(importDraft('{"schemaVersion":1}')).resolves.toEqual({ loaded: true, draft: stored })
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('/api/designer/drafts/import')
+    expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', body: '{"schemaVersion":1}' })
+    expect(init.headers).toMatchObject({ 'Content-Type': 'application/json', 'X-XSRF-TOKEN': 'token-2' })
+  })
+
+  it('says why the server refused a file', async () => {
+    answer(400, { title: 'O ficheiro não foi carregado.', detail: 'O ficheiro não é um workflow da defiro.' })
+
+    await expect(importDraft('olá')).resolves.toEqual({ loaded: false, why: 'O ficheiro não é um workflow da defiro.' })
+  })
+
+  it('gives the address of a workflow’s file', () => {
+    expect(specificationUrl('d1')).toBe('/api/designer/drafts/d1/specification')
+  })
+
   it('fails on any other answer', async () => {
     answer(500)
     await expect(listDrafts()).rejects.toThrow('GET /api/designer/drafts answered 500')
     answer(403)
     await expect(publishDraft('d1')).rejects.toThrow('POST /api/designer/drafts/d1/publish answered 403')
+    answer(500)
+    await expect(importDraft('{}')).rejects.toThrow('POST /api/designer/drafts/import answered 500')
   })
 })

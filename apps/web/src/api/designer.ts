@@ -1,5 +1,5 @@
 import type { Draft, Problem } from '../designer/draft'
-import { send, unexpected } from './http'
+import { csrfHeader, send, unexpected } from './http'
 
 /** A draft as the Designer keeps it, with its last publication if it has one */
 export type StoredDraft = Draft & {
@@ -15,6 +15,8 @@ export type StoredDraft = Draft & {
 export type StepType = { name: string; version: string; outcomes: string[] }
 
 export type Publication = { published: true; version: number } | { published: false; problems: Problem[] }
+
+export type Loading = { loaded: true; draft: StoredDraft } | { loaded: false; why: string }
 
 const DRAFTS = '/api/designer/drafts'
 
@@ -47,4 +49,21 @@ export async function publishDraft(id: string): Promise<Publication> {
   if (response.status === 422) return { published: false, problems: ((await response.json()) as { errors: Problem[] }).errors }
   if (!response.ok) throw unexpected('POST', url, response)
   return { published: true, version: ((await response.json()) as { version: number }).version }
+}
+
+/** The address of a created workflow's file: its published version (docs/workflow-specification.md) */
+export const specificationUrl = (id: string) => `${DRAFTS}/${id}/specification`
+
+/** Loads a workflow file, sent as it is, as a new draft to review; or says why the server refused it */
+export async function importDraft(file: string): Promise<Loading> {
+  const url = `${DRAFTS}/import`
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...csrfHeader() },
+    body: file,
+  })
+  if (response.status === 400) return { loaded: false, why: ((await response.json()) as { detail: string }).detail }
+  if (!response.ok) throw unexpected('POST', url, response)
+  return { loaded: true, draft: (await response.json()) as StoredDraft }
 }
