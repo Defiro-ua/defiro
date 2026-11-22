@@ -23,6 +23,7 @@ final class History {
         return switch (entry.action()) {
             case "submitted" -> who + ", submeteu o pedido";
             case Decisions.APPROVED -> who + ", aprovou o passo «" + details.get("step") + "»";
+            case Decisions.UNDONE -> who + ", desfez a aprovação do passo «" + details.get("step") + "»";
             case Decisions.MOVED -> "Passou ao passo «" + details.get("step") + "», com " + details.get("handledBy");
             default -> who + ", " + entry.action();
         };

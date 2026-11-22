@@ -23,6 +23,7 @@ class Decisions {
 
     static final String APPROVED = "approved";
     static final String MOVED = "moved";
+    static final String UNDONE = "undone";
 
     private final Tasks tasks;
     private final Procedures procedures;
@@ -84,6 +85,52 @@ class Decisions {
         moved.put("handledBy", next.handledBy());
         auditLog.append(null, procedure.id(), MOVED, "task", nextTask, moved);
         return new Approved(task.id(), procedure.reference(), next.name(), next.handledBy(), nextTask);
+    }
+
+    /** Where the request went back to: the step that was approved, now open again. */
+    record Undone(UUID task, String reference, String step) {}
+
+    /**
+     * Undoes an approval, while nobody has acted on the next step (Pedro, 2026-11-22): that step's
+     * task goes away, the approved one opens again, and the request goes back. Only the reviewer who
+     * approved may undo, and the history keeps both the approval and its undoing.
+     */
+    @Transactional
+    Optional<Undone> undo(UUID id, Person person) {
+        return tasks.find(id).map(task -> undo(task, person));
+    }
+
+    private Undone undo(Task task, Person person) {
+        boolean approvedByThisPerson = APPROVED.equals(task.decision())
+                && auditLog.last(APPROVED, task.id())
+                        .map(approval -> person.id().equals(approval.actor()))
+                        .orElse(false);
+        if (!approvedByThisPerson) {
+            throw new NotAllowedException();
+        }
+        Procedure procedure = procedures.find(task.procedure()).orElseThrow();
+        WorkflowSpecification specification =
+                versions.find(procedure.draft(), procedure.version()).orElseThrow();
+        StepSpecification step = Inbox.step(specification, task.step());
+        String to = next(specification, step.id(), APPROVED);
+        if (to == null) {
+            procedures.reopen(procedure.id());
+        } else {
+            StepSpecification next = Inbox.step(specification, to);
+            Optional<Tasks.OpenTask> nextTask = tasks.openOf(procedure.id()).stream()
+                    .filter(open -> open.step().equals(next.id()))
+                    .findFirst();
+            // Withdrawn only if still open: nobody may act on it in the meantime.
+            if (nextTask.isEmpty() || !tasks.withdraw(nextTask.get().id())) {
+                throw new NoLongerUndoableException(next.name());
+            }
+        }
+        tasks.reopen(task.id());
+        procedures.moveTo(procedure.id(), step.id());
+        Map<String, Object> details = who(person);
+        details.put("step", step.name());
+        auditLog.append(person.id(), procedure.id(), UNDONE, "task", task.id(), details);
+        return new Undone(task.id(), procedure.reference(), step.name());
     }
 
     private AlreadyDecidedException alreadyDecided(Task task) {

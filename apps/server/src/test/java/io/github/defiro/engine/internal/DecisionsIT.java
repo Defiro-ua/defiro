@@ -1,6 +1,7 @@
 package io.github.defiro.engine.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.defiro.TestcontainersConfiguration;
 import io.github.defiro.engine.deployment.Deployment;
@@ -56,6 +57,39 @@ class DecisionsIT {
                         .query(String.class)
                         .single())
                 .isEqualTo("closed");
+    }
+
+    @Test
+    void undoingTheApprovalOfTheLastStepOpensTheProcedureAgain() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        decisions.approve(submitted.task(), person("carla"));
+
+        assertThat(decisions.undo(submitted.task(), person("carla"))).isPresent();
+        assertThat(jdbc.sql("select status from engine.procedure where id = :id")
+                        .param("id", submitted.procedure())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("in_progress");
+    }
+
+    @Test
+    void aTaskNobodyApprovedHasNothingToUndo() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+
+        assertThatThrownBy(() -> decisions.undo(submitted.task(), person("carla")))
+                .isInstanceOf(NotAllowedException.class);
+    }
+
+    @Test
+    void anUndoneApprovalCanBeMadeAgain() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        decisions.approve(submitted.task(), person("carla"));
+        decisions.undo(submitted.task(), person("carla"));
+
+        assertThat(decisions.approve(submitted.task(), person("carla"))).isPresent();
     }
 
     @Test

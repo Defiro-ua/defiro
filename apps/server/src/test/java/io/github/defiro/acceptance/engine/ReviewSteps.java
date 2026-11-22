@@ -34,6 +34,9 @@ public class ReviewSteps {
     private String reference;
     private Instant actedFrom;
     private Instant actedTo;
+    // The scenario's first approval, which «his approval» means.
+    private String approver;
+    private UUID approval;
 
     @Autowired
     RequestSteps requests;
@@ -70,6 +73,42 @@ public class ReviewSteps {
         assertThat(response.statusCode()).as(person + " approves").isEqualTo(200);
     }
 
+    @Given("{person} approved it at {string}")
+    public void approvedItAt(String person, String step) {
+        approve(person, reference, step);
+        assertThat(response.statusCode()).as(person + " approves").isEqualTo(200);
+    }
+
+    @When("he undoes his approval")
+    public void heUndoesHisApproval() {
+        undoesHisApproval(approver);
+    }
+
+    @When("{person} undoes his approval")
+    public void undoesHisApproval(String person) {
+        assertThat(approval).as("an approval to undo").isNotNull();
+        actedFrom = Instant.now();
+        response = people.of(person).request().post("/api/engine/tasks/" + approval + "/undo");
+        actedTo = Instant.now();
+        access.answered(response);
+    }
+
+    @Then("the request is back at {string}, in the inbox of {person}")
+    public void theRequestIsBackAt(String step, String person) {
+        assertThat(response.statusCode()).as("the approval is undone").isEqualTo(200);
+        theRequestIsAt(step, person);
+    }
+
+    @Then("it is no longer in the inbox of {person}")
+    public void itIsNoLongerInTheInboxOf(String person) {
+        assertThat(inboxOf(person)).doesNotContain(reference);
+    }
+
+    @Then("the newest entry of its history is {string}, with the date and time of the undoing")
+    public void theNewestEntryOfItsHistoryIs(String entry) {
+        theNewestEntriesAre(List.of(entry));
+    }
+
     @Then("the request is at {string}, in the inbox of {person}")
     public void theRequestIsAt(String step, String person) {
         assertThat(currentStep()).isEqualTo(step);
@@ -101,8 +140,12 @@ public class ReviewSteps {
 
     @Then("the newest entries of its history, with the date and time of the approval, are")
     public void theNewestEntriesOfItsHistoryAre(DataTable entries) {
-        List<String> expected =
-                entries.asMaps().stream().map(row -> row.get("entry")).toList();
+        theNewestEntriesAre(
+                entries.asMaps().stream().map(row -> row.get("entry")).toList());
+    }
+
+    // The newest first, each at the time of the scenario's When.
+    private void theNewestEntriesAre(List<String> expected) {
         JsonPath request = requestAs(requests.requester());
         List<String> texts = request.getList("history.text", String.class);
         List<String> times = request.getList("history.at", String.class);
@@ -166,6 +209,10 @@ public class ReviewSteps {
         response = people.of(person).request().post("/api/engine/tasks/" + taskOf(step) + "/approve");
         actedTo = Instant.now();
         access.answered(response);
+        if (response.statusCode() == 200 && approval == null) {
+            approver = person;
+            approval = taskOf(step);
+        }
         if (response.statusCode() == 200 && response.jsonPath().getString("nextStep") != null) {
             tasks.put(
                     response.jsonPath().getString("nextStep"),

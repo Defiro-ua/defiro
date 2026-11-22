@@ -75,6 +75,25 @@ class Tasks {
                 == 1;
     }
 
+    /**
+     * Removes a task nobody has acted on, when the decision that opened it is undone. It is only
+     * removed while still open; the history keeps what happened.
+     */
+    boolean withdraw(UUID id) {
+        return jdbc.sql("delete from engine.task where id = :id and status = :open")
+                        .param("id", id)
+                        .param("open", OPEN)
+                        .update()
+                == 1;
+    }
+
+    /** Opens a decided task again, with no decision, when its decision is undone. */
+    void reopen(UUID id) {
+        jdbc.sql("""
+                        update engine.task set status = :open, decision = null, decided_at = null
+                        where id = :id""").param("open", OPEN).param("id", id).update();
+    }
+
     /** Opens the task of a step for its candidates. */
     UUID open(UUID procedure, StepSpecification step) {
         UUID id = UUID.randomUUID();

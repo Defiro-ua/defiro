@@ -32,9 +32,14 @@ class TaskController {
         return ResponseEntity.of(decisions.approve(id, Person.of(user)));
     }
 
+    @PostMapping("/undo")
+    ResponseEntity<Decisions.Undone> undo(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
+        return ResponseEntity.of(decisions.undo(id, Person.of(user)));
+    }
+
     /** 409, with the text the reviewer is shown. */
-    @ExceptionHandler
-    ProblemDetail alreadyDecided(AlreadyDecidedException decided) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, decided.getMessage());
+    @ExceptionHandler({AlreadyDecidedException.class, NoLongerUndoableException.class})
+    ProblemDetail tooLate(RuntimeException late) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, late.getMessage());
     }
 }

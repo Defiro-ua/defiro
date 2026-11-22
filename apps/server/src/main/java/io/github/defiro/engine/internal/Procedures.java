@@ -64,6 +64,13 @@ class Procedures {
                         where id = :id""").param("id", procedure).update();
     }
 
+    /** The procedure goes on again, after the approval of its last step was undone. */
+    void reopen(UUID procedure) {
+        jdbc.sql("update engine.procedure set status = 'in_progress', closed_at = null where id = :id")
+                .param("id", procedure)
+                .update();
+    }
+
     /** The request: the document of the procedure's first step. */
     RequestData request(UUID procedure) {
         String data =
