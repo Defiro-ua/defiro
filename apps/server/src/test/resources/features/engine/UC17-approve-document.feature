@@ -148,11 +148,48 @@ Feature: Approve a document
       Then she is not allowed to
       And the request is still at "Validação da chefia"
 
-    Scenario: The first to act wins
-      Given Segunda Chefia approved the request "AC-2026-0147"
-      When Rui Matos approves the request "AC-2026-0147"
-      Then he is told «Este pedido já foi tratado por Segunda Chefia, Chefe de Divisão.»
-      And the request was approved only once
+    # Two candidates acting at the same time: the server lets only the first decide, and tells the
+    # other «Este pedido já foi tratado por <nome>, <cargo>.» (DecisionsIT). With the task taken
+    # first (the rule below), a candidate meets that only in a race.
+
+  Rule: A candidate takes the task with «Rever», and the other candidates see who is reviewing it
+    # Decision with Pedro (2026-11-22, UC19 session): taking the task reserves it, so two candidates
+    # never review the same request, nor write notes on it, at once. Approving needs the task taken.
+    # «Rever» in the inbox takes it and opens the request; «Libertar a tarefa» gives it back.
+
+    Scenario: Taking the task marks it for the other candidates
+      When Rui Matos takes the request "AC-2026-0147" from his inbox
+      Then the request is in the inbox of Segunda Chefia, marked «Em revisão por Rui Matos, Chefe de Divisão»
+
+    Scenario: The first to take the task wins
+      Given Segunda Chefia took the request "AC-2026-0147" from her inbox
+      When Rui Matos takes the request "AC-2026-0147" from his inbox
+      Then he sees «Em revisão por Segunda Chefia, Chefe de Divisão.», with no decision
+
+    Scenario: Another candidate can only look at a request someone took
+      Given Rui Matos took the request "AC-2026-0147" from his inbox
+      When Segunda Chefia approves the request "AC-2026-0147"
+      Then she is not allowed to
+      And the request is still at "Validação da chefia"
+
+    Scenario: Releasing the task gives it back to every candidate
+      Given Rui Matos took the request "AC-2026-0147" from his inbox
+      When he releases the task
+      Then the request is in the inbox of Segunda Chefia, to review
+
+    Scenario: Taking and releasing the task are logged in the history
+      Given Rui Matos took the request "AC-2026-0147" from his inbox
+      When he releases the task
+      Then the newest entries of its history, with the date and time of the release, are
+        | entry                                                                |
+        | Rui Matos, Chefe de Divisão, libertou a tarefa «Validação da chefia» |
+        | Rui Matos, Chefe de Divisão, aceitou a tarefa «Validação da chefia»  |
+
+    @browser
+    Scenario: A request someone took opens to look only
+      Given Rui Matos took the request "AC-2026-0147" from his inbox
+      When Segunda Chefia chooses «Ver» on it in her inbox
+      Then her screen shows «Em revisão por Rui Matos, Chefe de Divisão.», with no decision
 
   Rule: The notice «Pedido aprovado» appears with «Desfazer», which reverses the decision, and stays until it is closed
     # Decision with Pedro: an approval can be undone while nobody has acted on the next step.
@@ -162,7 +199,7 @@ Feature: Approve a document
       Given Rui Matos approved the request "AC-2026-0147"
       When he undoes his approval
       Then the request is back at "Validação da chefia", in the inbox of Rui Matos
-      And it is back in the inbox of Segunda Chefia
+      And the request is in the inbox of Segunda Chefia, marked «Em revisão por Rui Matos, Chefe de Divisão»
       And it is no longer in the inbox of Carla Dias
 
     Scenario: Undoing is refused once the next step was acted on
