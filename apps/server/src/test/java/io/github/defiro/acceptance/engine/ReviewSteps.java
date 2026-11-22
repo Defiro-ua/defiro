@@ -25,6 +25,7 @@ public class ReviewSteps {
 
     private static final String INBOX = "/api/engine/inbox";
     private static final String PROCEDURES = "/api/engine/procedures/";
+    private static final String TASKS = "/api/engine/tasks/";
 
     private final People people = new People();
     // The task of each step, by the step's name, as the request reaches it.
@@ -32,6 +33,8 @@ public class ReviewSteps {
     private Response response;
     private String openedFile;
     private String reference;
+    // Who took the task last, whom «he releases» and «he sees» mean
+    private String taker;
     private Instant actedFrom;
     private Instant actedTo;
     // The scenario's first approval, which «his approval» means.
@@ -104,9 +107,47 @@ public class ReviewSteps {
         assertThat(inboxOf(person)).doesNotContain(reference);
     }
 
-    @Then("it is back in the inbox of {person}")
-    public void itIsBackInTheInboxOf(String person) {
-        assertThat(inboxOf(person)).contains(reference);
+    @When("{person} takes the request {string} from his/her inbox")
+    public void takesTheRequest(String person, String reference) {
+        this.reference = reference;
+        taker = person;
+        response = people.of(person).request().post(TASKS + taskOf(requests.waitingAt()) + "/take");
+        access.answered(response);
+    }
+
+    @Given("{person} took the request {string} from his/her inbox")
+    public void tookTheRequest(String person, String reference) {
+        takesTheRequest(person, reference);
+        assertThat(response.statusCode()).as(person + " takes the task").isEqualTo(200);
+    }
+
+    @When("he/she releases the task")
+    public void releasesTheTask() {
+        actedFrom = Instant.now();
+        response = people.of(taker).request().post(TASKS + taskOf(requests.waitingAt()) + "/release");
+        actedTo = Instant.now();
+        access.answered(response);
+        assertThat(response.statusCode()).as(taker + " releases the task").isEqualTo(200);
+    }
+
+    @Then("the request is in the inbox of {person}, marked «{}»")
+    public void theRequestIsInTheInboxMarked(String person, String marked) {
+        Map<String, Object> item = inboxItemOf(person);
+        assertThat(item.get("reviewer")).as("who has the task").isNotNull();
+        assertThat("Em revisão por " + item.get("reviewer")).isEqualTo(marked);
+        assertThat(item.get("mine")).isEqualTo(false);
+    }
+
+    @Then("the request is in the inbox of {person}, to review")
+    public void theRequestIsInTheInboxToReview(String person) {
+        assertThat(inboxItemOf(person).get("reviewer")).as("who has the task").isNull();
+    }
+
+    @Then("(s)he sees «{}», with no decision")
+    public void seesWithNoDecision(String text) {
+        JsonPath request = requestAs(taker);
+        assertThat(request.getString("task")).as("a task to decide").isNull();
+        assertThat("Em revisão por " + request.getString("reviewer") + ".").isEqualTo(text);
     }
 
     // Nothing is erased from the history
@@ -149,8 +190,8 @@ public class ReviewSteps {
         assertThat(history().stream().filter(line -> line.endsWith(approval))).hasSize(1);
     }
 
-    @Then("the newest entries of its history, with the date and time of the approval, are")
-    public void theNewestEntriesOfItsHistoryAre(DataTable entries) {
+    @Then("the newest entries of its history, with the date and time of the {word}, are")
+    public void theNewestEntriesOfItsHistoryAre(String action, DataTable entries) {
         theNewestEntriesAre(
                 entries.asMaps().stream().map(row -> row.get("entry")).toList());
     }
@@ -244,10 +285,12 @@ public class ReviewSteps {
         assertThat(response.asByteArray()).isEqualTo(requests.attached(openedFile));
     }
 
+    // As the web app does: «Rever» takes the task, then «Aprovar». The answer is the approval's.
     private void approve(String person, String reference, String step) {
         this.reference = reference;
         actedFrom = Instant.now();
-        response = people.of(person).request().post("/api/engine/tasks/" + taskOf(step) + "/approve");
+        people.of(person).request().post(TASKS + taskOf(step) + "/take");
+        response = people.of(person).request().post(TASKS + taskOf(step) + "/approve");
         actedTo = Instant.now();
         access.answered(response);
         if (response.statusCode() == 200 && approval == null) {
@@ -285,6 +328,16 @@ public class ReviewSteps {
 
     private List<String> history() {
         return requestAs(requests.requester()).getList("history.text", String.class);
+    }
+
+    // The request's row in the person's inbox
+    private Map<String, Object> inboxItemOf(String person) {
+        Response inbox = people.of(person).request().get(INBOX);
+        assertThat(inbox.statusCode()).isEqualTo(200);
+        assertThat(inbox.jsonPath().getList("reference", String.class))
+                .as("the requests in the inbox of " + person)
+                .contains(reference);
+        return inbox.jsonPath().getMap("find { it.reference == '%s' }".formatted(reference));
     }
 
     private List<String> inboxOf(String person) {

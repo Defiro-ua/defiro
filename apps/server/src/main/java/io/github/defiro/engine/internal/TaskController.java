@@ -27,6 +27,18 @@ class TaskController {
         this.decisions = decisions;
     }
 
+    /** «Rever» in the inbox: the candidate takes the task, so nobody else reviews it meanwhile. */
+    @PostMapping("/take")
+    ResponseEntity<Decisions.Taken> take(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
+        return ResponseEntity.of(decisions.take(id, Person.of(user)));
+    }
+
+    /** «Libertar a tarefa»: back to every candidate. */
+    @PostMapping("/release")
+    ResponseEntity<Decisions.Taken> release(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
+        return ResponseEntity.of(decisions.release(id, Person.of(user)));
+    }
+
     @PostMapping("/approve")
     ResponseEntity<Decisions.Approved> approve(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
         return ResponseEntity.of(decisions.approve(id, Person.of(user)));
@@ -38,7 +50,7 @@ class TaskController {
     }
 
     /** 409, with the text the reviewer is shown. */
-    @ExceptionHandler({AlreadyDecidedException.class, NoLongerUndoableException.class})
+    @ExceptionHandler({AlreadyDecidedException.class, NoLongerUndoableException.class, TakenByOtherException.class})
     ProblemDetail tooLate(RuntimeException late) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, late.getMessage());
     }

@@ -27,6 +27,9 @@ class RequestsIT {
     Requests requests;
 
     @Autowired
+    Decisions decisions;
+
+    @Autowired
     ProcedureSeed seed;
 
     @Autowired
@@ -72,8 +75,30 @@ class RequestsIT {
     @Test
     void aCandidateOfTheCurrentStepOpensIt() {
         assertThat(requests.open(reference, person("carla", "Divisão Financeira")))
+                .hasValueSatisfying(opened -> {
+                    assertThat(opened.task()).as("a task she has not taken yet").isNull();
+                    assertThat(opened.reviewer()).isNull();
+                });
+    }
+
+    @Test
+    void aCandidateWhoTookTheTaskMayDecideIt() {
+        decisions.take(submitted.task(), carla());
+
+        assertThat(requests.open(reference, carla()))
                 .hasValueSatisfying(opened ->
                         assertThat(opened.task()).as("the task she may decide").isEqualTo(submitted.task()));
+    }
+
+    @Test
+    void theOtherCandidatesSeeWhoTookTheTaskAndMayNotDecideIt() {
+        decisions.take(submitted.task(), carla());
+
+        assertThat(requests.open(reference, person("outra", "Divisão Financeira")))
+                .hasValueSatisfying(opened -> {
+                    assertThat(opened.task()).isNull();
+                    assertThat(opened.reviewer()).isEqualTo("Carla Dias, Técnica da Divisão Financeira");
+                });
     }
 
     @Test
@@ -112,7 +137,7 @@ class RequestsIT {
         assertThat(requests.open(reference, person("carla", "Divisão Financeira")))
                 .hasValueSatisfying(opened -> {
                     assertThat(opened.requester().name()).isEqualTo("Ana Ferreira");
-                    assertThat(opened.task()).as("the candidate's task").isEqualTo(submitted.task());
+                    assertThat(opened.path()).hasSize(2);
                 });
     }
 
@@ -148,6 +173,10 @@ class RequestsIT {
                 null,
                 List.of(),
                 List.of());
+    }
+
+    private static Person carla() {
+        return new Person("carla", "Carla Dias", "Técnica da Divisão Financeira", "Divisão Financeira", List.of());
     }
 
     private static Person person(String id, String unit) {

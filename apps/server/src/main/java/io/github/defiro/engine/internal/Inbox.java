@@ -21,14 +21,20 @@ class Inbox {
     private final Tasks tasks;
     private final SpecificationVersions versions;
     private final Candidates candidates;
+    private final Decisions decisions;
 
-    Inbox(Tasks tasks, SpecificationVersions versions, Candidates candidates) {
+    Inbox(Tasks tasks, SpecificationVersions versions, Candidates candidates, Decisions decisions) {
         this.tasks = tasks;
         this.versions = versions;
         this.candidates = candidates;
+        this.decisions = decisions;
     }
 
-    record Item(UUID task, String reference, String requester, String step) {}
+    /**
+     * A task waiting for this person. If a candidate took it, the reviewer is who («Rui Matos,
+     * Chefe de Divisão») and mine says whether it is this person.
+     */
+    record Item(UUID task, String reference, String requester, String step, String reviewer, boolean mine) {}
 
     List<Item> of(Person person) {
         Map<String, WorkflowSpecification> specifications = new HashMap<>();
@@ -39,7 +45,16 @@ class Inbox {
                     key -> versions.find(task.draft(), task.version()).orElseThrow());
             StepSpecification step = step(specification, task.step());
             if (candidates.canHandle(step.handledBy(), task.requesterUnit(), person)) {
-                items.add(new Item(task.id(), task.reference(), task.requesterName(), step.name()));
+                String reviewer = task.takenBy() == null
+                        ? null
+                        : decisions.reviewer(task.id()).orElse(null);
+                items.add(new Item(
+                        task.id(),
+                        task.reference(),
+                        task.requesterName(),
+                        step.name(),
+                        reviewer,
+                        person.id().equals(task.takenBy())));
             }
         }
         return items;

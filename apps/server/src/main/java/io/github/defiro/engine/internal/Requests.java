@@ -29,6 +29,7 @@ class Requests {
     private final Files files;
     private final AuditLog auditLog;
     private final JsonMapper json;
+    private final Decisions decisions;
 
     Requests(
             Procedures procedures,
@@ -37,7 +38,8 @@ class Requests {
             Candidates candidates,
             Files files,
             AuditLog auditLog,
-            JsonMapper json) {
+            JsonMapper json,
+            Decisions decisions) {
         this.procedures = procedures;
         this.versions = versions;
         this.tasks = tasks;
@@ -45,6 +47,7 @@ class Requests {
         this.files = files;
         this.auditLog = auditLog;
         this.json = json;
+        this.decisions = decisions;
     }
 
     record Step(String id, String name, String handledBy) {}
@@ -73,7 +76,8 @@ class Requests {
             List<Answer> answers,
             List<File> files,
             List<History.Line> history,
-            UUID task) {}
+            UUID task,
+            String reviewer) {}
 
     /** The request, or empty if there is none with this reference. */
     Optional<Request> open(String reference, Person person) {
@@ -81,7 +85,17 @@ class Requests {
             RequestData request = procedures.request(procedure.id());
             WorkflowSpecification specification = specification(procedure);
             List<AuditLog.Entry> entries = auditLog.of(procedure.id());
-            Optional<UUID> task = mustTakePart(procedure, request, specification, entries, person);
+            Optional<Tasks.OpenTask> candidateOf = mustTakePart(procedure, request, specification, entries, person);
+            // The person decides the task only once they took it («Rever» in the inbox)
+            UUID task = candidateOf
+                    .filter(open -> person.id().equals(open.takenBy()))
+                    .map(Tasks.OpenTask::id)
+                    .orElse(null);
+            String reviewer = tasks.openOf(procedure.id()).stream()
+                    .filter(open -> open.takenBy() != null)
+                    .findFirst()
+                    .flatMap(open -> decisions.reviewer(open.id()))
+                    .orElse(null);
             List<Resubmission> resubmissions = entries.stream()
                     .filter(entry -> Resubmission.ACTION.equals(entry.action()))
                     .map(entry -> json.convertValue(entry.details(), Resubmission.class))
@@ -99,7 +113,8 @@ class Requests {
                     answers(request, resubmissions),
                     files(procedure, resubmissions),
                     entries.stream().map(History::of).toList(),
-                    task.orElse(null));
+                    task,
+                    reviewer);
         });
     }
 
@@ -150,21 +165,20 @@ class Requests {
     }
 
     /**
-     * The open task of the request this person may decide, if any. Anyone else who takes no part
+     * The open task of the request this person is a candidate of, if any. Anyone else who takes no part
      * in the request may not open it.
      */
-    private Optional<UUID> mustTakePart(
+    private Optional<Tasks.OpenTask> mustTakePart(
             Procedure procedure,
             RequestData request,
             WorkflowSpecification specification,
             List<AuditLog.Entry> entries,
             Person person) {
-        Optional<UUID> task = tasks.openOf(procedure.id()).stream()
+        Optional<Tasks.OpenTask> task = tasks.openOf(procedure.id()).stream()
                 .filter(open -> candidates.canHandle(
                         step(specification, open.step()).handledBy(),
                         request.requester().unit(),
                         person))
-                .map(Tasks.OpenTask::id)
                 .findFirst();
         boolean requester = procedure.requester().equals(person.id());
         boolean actedOnIt = entries.stream().anyMatch(entry -> person.id().equals(entry.actor()));

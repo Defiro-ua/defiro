@@ -24,6 +24,8 @@ class Decisions {
     static final String APPROVED = "approved";
     static final String MOVED = "moved";
     static final String UNDONE = "undone";
+    static final String TAKEN = "taken";
+    static final String RELEASED = "released";
     private static final String NEXT_TASK = "nextTask";
 
     private final Tasks tasks;
@@ -51,6 +53,55 @@ class Decisions {
      */
     record Approved(UUID task, String reference, String nextStep, String handledBy, UUID nextTask) {}
 
+    /** The task a candidate took, and the request it belongs to. */
+    record Taken(UUID task, String reference) {}
+
+    /**
+     * A candidate of the step takes the task, so that nobody else reviews the request meanwhile.
+     * Taking a task one already has changes nothing. If someone else has it, they are named.
+     */
+    @Transactional
+    Optional<Taken> take(UUID id, Person person) {
+        return tasks.find(id).map(task -> {
+            Procedure procedure = procedures.find(task.procedure()).orElseThrow();
+            StepSpecification step = mustBeCandidate(task, procedure, person);
+            if (!task.isOpen()) {
+                throw alreadyDecided(task);
+            }
+            if (tasks.take(task.id(), person.id())) {
+                Map<String, Object> details = who(person);
+                details.put("step", step.name());
+                auditLog.append(person.id(), procedure.id(), TAKEN, "task", task.id(), details);
+            } else if (!person.id()
+                    .equals(tasks.find(task.id()).map(Task::takenBy).orElse(null))) {
+                throw takenByOther(task.id());
+            }
+            return new Taken(task.id(), procedure.reference());
+        });
+    }
+
+    /** Gives the task back to every candidate. Only who has it may. */
+    @Transactional
+    Optional<Taken> release(UUID id, Person person) {
+        return tasks.find(id).map(task -> {
+            if (!tasks.release(task.id(), person.id())) {
+                throw new NotAllowedException();
+            }
+            Procedure procedure = procedures.find(task.procedure()).orElseThrow();
+            Map<String, Object> details = who(person);
+            details.put("step", step(procedure, task.step()).name());
+            auditLog.append(person.id(), procedure.id(), RELEASED, "task", task.id(), details);
+            return new Taken(task.id(), procedure.reference());
+        });
+    }
+
+    /** Who has the task now, as «Rui Matos, Chefe de Divisão», if anyone. */
+    Optional<String> reviewer(UUID task) {
+        return auditLog.last(TAKEN, task)
+                .map(taken ->
+                        taken.details().get("name") + ", " + taken.details().get("jobTitle"));
+    }
+
     /** Approves the task, or gives empty if there is no such task. */
     @Transactional
     Optional<Approved> approve(UUID id, Person person) {
@@ -61,12 +112,12 @@ class Decisions {
         Procedure procedure = procedures.find(task.procedure()).orElseThrow();
         WorkflowSpecification specification =
                 versions.find(procedure.draft(), procedure.version()).orElseThrow();
-        StepSpecification step = Inbox.step(specification, task.step());
-        String requesterUnit = procedures.request(procedure.id()).requester().unit();
-        if (!candidates.canHandle(step.handledBy(), requesterUnit, person)) {
+        StepSpecification step = mustBeCandidate(task, procedure, person);
+        // Only who took the open task decides it; once decided, whoever comes late is told who did
+        if (task.isOpen() && !person.id().equals(task.takenBy())) {
             throw new NotAllowedException();
         }
-        if (!tasks.decide(task.id(), APPROVED)) {
+        if (!tasks.decide(task.id(), APPROVED, person.id())) {
             throw alreadyDecided(task);
         }
         String to = next(specification, step.id(), APPROVED);
@@ -138,6 +189,25 @@ class Decisions {
 
     // Who acted first: who decided the task, or, when its task was withdrawn meanwhile, who undid
     // the approval that had opened it.
+    private StepSpecification mustBeCandidate(Task task, Procedure procedure, Person person) {
+        StepSpecification step = step(procedure, task.step());
+        String requesterUnit = procedures.request(procedure.id()).requester().unit();
+        if (!candidates.canHandle(step.handledBy(), requesterUnit, person)) {
+            throw new NotAllowedException();
+        }
+        return step;
+    }
+
+    private StepSpecification step(Procedure procedure, String step) {
+        WorkflowSpecification specification =
+                versions.find(procedure.draft(), procedure.version()).orElseThrow();
+        return Inbox.step(specification, step);
+    }
+
+    private TakenByOtherException takenByOther(UUID task) {
+        return new TakenByOtherException(reviewer(task).orElse(""));
+    }
+
     private AlreadyDecidedException alreadyDecided(Task task) {
         Map<String, Object> first = auditLog.last(APPROVED, task.id())
                 .or(() -> auditLog.latest(task.procedure(), UNDONE))

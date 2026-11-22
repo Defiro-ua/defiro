@@ -14,6 +14,7 @@ import io.github.defiro.spec.WorkflowSpecification;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -55,7 +56,7 @@ class DecisionsIT {
         ProcedureSeed.Submitted submitted =
                 submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
 
-        assertThat(decisions.approve(submitted.task(), person("carla")))
+        assertThat(takeAndApprove(submitted.task(), person("carla")))
                 .hasValueSatisfying(approved -> assertThat(approved.nextStep()).isNull());
         assertThat(jdbc.sql("select status from engine.procedure where id = :id")
                         .param("id", submitted.procedure())
@@ -68,7 +69,7 @@ class DecisionsIT {
     void undoingTheApprovalOfTheLastStepOpensTheProcedureAgain() {
         ProcedureSeed.Submitted submitted =
                 submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
-        decisions.approve(submitted.task(), person("carla"));
+        takeAndApprove(submitted.task(), person("carla"));
 
         assertThat(decisions.undo(submitted.task(), person("carla"))).isPresent();
         assertThat(jdbc.sql("select status from engine.procedure where id = :id")
@@ -91,10 +92,10 @@ class DecisionsIT {
     void anUndoneApprovalCanBeMadeAgain() {
         ProcedureSeed.Submitted submitted =
                 submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
-        decisions.approve(submitted.task(), person("carla"));
+        takeAndApprove(submitted.task(), person("carla"));
         decisions.undo(submitted.task(), person("carla"));
 
-        assertThat(decisions.approve(submitted.task(), person("carla"))).isPresent();
+        assertThat(takeAndApprove(submitted.task(), person("carla"))).isPresent();
     }
 
     @Test
@@ -102,11 +103,10 @@ class DecisionsIT {
         StepSpecification first = step("Validação da chefia", "review");
         StepSpecification second = step("Verificação financeira", "final-validation");
         ProcedureSeed.Submitted submitted = submit(step("Pedido", "submission"), first, second);
-        decisions.approve(submitted.task(), person("rui"));
+        takeAndApprove(submitted.task(), person("rui"));
         // Corrected and resubmitted (UC18, UC20): back to the first review, where Segunda approves
         ProcedureSeed.Resubmitted resubmitted = seed.resubmit(submitted, ANA, List.of(), Map.of(), first);
-        UUID secondsNextTask = decisions
-                .approve(resubmitted.request().task(), person("segunda"))
+        UUID secondsNextTask = takeAndApprove(resubmitted.request().task(), person("segunda"))
                 .orElseThrow()
                 .nextTask();
 
@@ -125,8 +125,8 @@ class DecisionsIT {
         StepSpecification second = step("Verificação financeira", "final-validation");
         ProcedureSeed.Submitted submitted =
                 submit(step("Pedido", "submission"), step("Validação da chefia", "review"), second);
-        UUID next = decisions
-                .approve(submitted.task(), new Person("rui", "Rui Matos", "Chefe de Divisão", UNIT, List.of()))
+        UUID next = takeAndApprove(
+                        submitted.task(), new Person("rui", "Rui Matos", "Chefe de Divisão", UNIT, List.of()))
                 .orElseThrow()
                 .nextTask();
         decisions.undo(submitted.task(), new Person("rui", "Rui Matos", "Chefe de Divisão", UNIT, List.of()));
@@ -148,35 +148,115 @@ class DecisionsIT {
     }
 
     @Test
-    void ofTwoPeopleApprovingAtTheSameTimeOnlyOneDoes() throws Exception {
+    void ofTwoPeopleTakingTheTaskAtTheSameTimeOnlyOneDoes() throws Exception {
         ProcedureSeed.Submitted submitted =
                 submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
-        CountDownLatch start = new CountDownLatch(1);
-        Callable<Boolean> approve = () -> {
-            start.await();
+
+        List<Boolean> took = race(() -> {
             try {
                 return decisions
-                        .approve(submitted.task(), person(UUID.randomUUID().toString()))
+                        .take(submitted.task(), person(UUID.randomUUID().toString()))
                         .isPresent();
+            } catch (TakenByOtherException late) {
+                return false;
+            }
+        });
+
+        assertThat(took).containsExactlyInAnyOrder(true, false);
+        assertThat(entries("taken", submitted.task())).isEqualTo(1);
+    }
+
+    @Test
+    void ofTwoApprovalsAtTheSameTimeOnlyOneCounts() throws Exception {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        Person carla = person("carla");
+        decisions.take(submitted.task(), carla);
+
+        // A double click on «Aprovar»
+        List<Boolean> approved = race(() -> {
+            try {
+                return decisions.approve(submitted.task(), carla).isPresent();
             } catch (AlreadyDecidedException late) {
                 return false;
             }
+        });
+
+        assertThat(approved).containsExactlyInAnyOrder(true, false);
+        assertThat(entries("approved", submitted.task())).isEqualTo(1);
+    }
+
+    @Test
+    void onlyWhoTookTheTaskMayApproveIt() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        decisions.take(submitted.task(), person("carla"));
+
+        assertThatThrownBy(() -> decisions.approve(submitted.task(), person("outra")))
+                .isInstanceOf(NotAllowedException.class);
+    }
+
+    @Test
+    void anUntakenTaskCannotBeApproved() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+
+        assertThatThrownBy(() -> decisions.approve(submitted.task(), person("carla")))
+                .isInstanceOf(NotAllowedException.class);
+    }
+
+    @Test
+    void releasingGivesTheTaskBackToEveryCandidateAndOnlyWhoTookItMay() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        decisions.take(submitted.task(), person("carla"));
+
+        assertThatThrownBy(() -> decisions.release(submitted.task(), person("outra")))
+                .isInstanceOf(NotAllowedException.class);
+        assertThat(decisions.release(submitted.task(), person("carla"))).isPresent();
+        assertThat(decisions.take(submitted.task(), person("outra"))).isPresent();
+    }
+
+    @Test
+    void takingATaskOneHasChangesNothing() {
+        ProcedureSeed.Submitted submitted =
+                submit(step("Pedido", "submission"), step("Validação final", "final-validation"));
+        decisions.take(submitted.task(), person("carla"));
+
+        assertThat(decisions.take(submitted.task(), person("carla"))).isPresent();
+        assertThat(entries("taken", submitted.task())).isEqualTo(1);
+    }
+
+    // Runs the same action in two threads at once, and gives what each returned
+    private static List<Boolean> race(Callable<Boolean> action) throws Exception {
+        CountDownLatch start = new CountDownLatch(1);
+        Callable<Boolean> atOnce = () -> {
+            start.await();
+            return action.call();
         };
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
-            Future<Boolean> first = pool.submit(approve);
-            Future<Boolean> second = pool.submit(approve);
+            Future<Boolean> first = pool.submit(atOnce);
+            Future<Boolean> second = pool.submit(atOnce);
             start.countDown();
-
-            assertThat(List.of(first.get(), second.get())).containsExactlyInAnyOrder(true, false);
+            return List.of(first.get(), second.get());
         } finally {
             pool.shutdown();
         }
-        assertThat(jdbc.sql("select count(*) from engine.audit_log where action = 'approved' and entity_id = :task")
-                        .param("task", submitted.task().toString())
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(1);
+    }
+
+    private int entries(String action, UUID task) {
+        return jdbc.sql("select count(*) from engine.audit_log where action = :action and entity_id = :task")
+                .param("action", action)
+                .param("task", task.toString())
+                .query(Integer.class)
+                .single();
+    }
+
+    // As in the web app: «Rever» takes the task, then «Aprovar»
+    private Optional<Decisions.Approved> takeAndApprove(UUID task, Person person) {
+        decisions.take(task, person);
+        return decisions.approve(task, person);
     }
 
     private ProcedureSeed.Submitted submit(StepSpecification request, StepSpecification... reviews) {
