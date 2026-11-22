@@ -44,7 +44,9 @@ class DesignerAccessIT {
                 "GET    | " + DRAFT + "              | {}",
                 "PUT    | " + DRAFT + "              | {}",
                 "POST   | " + DRAFT + "/publish      | {}",
-                "GET    | /api/designer/step-types   | {}"
+                "GET    | /api/designer/step-types   | {}",
+                "GET    | " + DRAFT + "/specification | {}",
+                "POST   | /api/designer/drafts/import | {}"
             })
     void someoneWithoutTheWorkflowManagerRoleIsRefused(String method, String path, String body) throws Exception {
         String employee = bearer(TRUSTED_KEY, claims -> claims.claim("roles", List.of()));

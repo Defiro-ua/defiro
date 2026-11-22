@@ -118,3 +118,29 @@ Feature: Create workflow
       Given "Ajudas de custo" was created
       When she opens the list of workflows
       Then "Ajudas de custo" is listed
+
+  Rule: A created workflow can be downloaded as a file, and a file can start a new workflow
+    # The file is the workflow's specification in JSON (docs/workflow-specification.md). A file that
+    # comes in becomes a new draft, to review in the designer: the Designer checks it when it is
+    # created, as any other draft.
+
+    Scenario: Downloading a created workflow gives its published version
+      Given "Ajudas de custo" was created
+      When she downloads "Ajudas de custo"
+      Then she gets the file "ajudas-de-custo-v1.json" with the workflow "Ajudas de custo" and the path "Pedido", "Validação da chefia"
+
+    Scenario: A workflow file becomes a draft to review
+      Given she has the file of the workflow "Horas extraordinárias" with the path "Pedido", "Validação da chefia"
+      When she loads the file
+      Then she has a new draft "Horas extraordinárias" with the path "Pedido", "Validação da chefia"
+      And it is not created yet
+
+    Scenario: A file that is not a workflow is refused
+      When she loads a file that is not a workflow
+      Then the file is refused with "O ficheiro não é um workflow da defiro."
+
+    @browser
+    Scenario: Creating a workflow from a file
+      Given she has the file of the workflow "Horas extraordinárias" with the path "Pedido", "Validação da chefia"
+      When she loads the file in «Workflows» and creates the workflow
+      Then «Workflows» lists "Horas extraordinárias" as version 1

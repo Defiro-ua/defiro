@@ -52,7 +52,8 @@ class SpecificationVersions implements Deployment {
         return version;
     }
 
-    Optional<WorkflowSpecification> find(UUID draft, int version) {
+    @Override
+    public Optional<WorkflowSpecification> version(UUID draft, int version) {
         return jdbc.sql(
                         "select specification from engine.specification_version where draft = :draft and version = :version")
                 .param("draft", draft)

@@ -3,9 +3,11 @@ package io.github.defiro.acceptance.designer;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.nullValue;
 
 import com.microsoft.playwright.Locator;
 import io.cucumber.java.After;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.springframework.beans.factory.annotation.Value;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * UC03 through the Designer API. As in docs/sequence_diagram.txt, the browser holds the draft and
@@ -52,6 +55,7 @@ public class CreateWorkflowSteps {
     private Response response;
     private String lastStep;
     private DesignerScreen screen;
+    private Map<String, Object> file;
     private boolean acted;
 
     // The port of the server under test, which also serves the web app
@@ -206,6 +210,79 @@ public class CreateWorkflowSteps {
     @Then("the name {string} is still there")
     public void theNameIsStillThere(String name) {
         assertThat(screen.workflowName()).hasValue(name);
+    }
+
+    @When("she downloads {string}")
+    public void sheDownloads(String name) {
+        acted = true;
+        response = as(sofia).get(DRAFTS + "/" + draftId + "/specification");
+    }
+
+    @Then("she gets the file {string} with the workflow {string} and the path {string}, {string}")
+    public void sheGetsTheFile(String fileName, String name, String first, String second) {
+        response.then()
+                .statusCode(200)
+                .header("Content-Disposition", containsString("filename=\"" + fileName + "\""))
+                .body("schemaVersion", equalTo(1))
+                .body("name", equalTo(name))
+                .body("steps.name", contains(first, second));
+    }
+
+    @Given("she has the file of the workflow {string} with the path {string}, {string}")
+    public void sheHasTheFileOfTheWorkflow(String name, String request, String review) {
+        Map<String, Object> requestStep = new HashMap<>(steps().getFirst());
+        requestStep.put("name", request);
+        Map<String, Object> reviewStep = reviewStep(review, "Chefias da unidade do requerente", 5);
+        reviewStep.put("returnReasons", List.of("Preenchido incorretamente"));
+        reviewStep.put("rejectReasons", List.of("Pedido não autorizado"));
+        file = Map.of(
+                "schemaVersion", 1, "name", name, "steps", List.of(requestStep, reviewStep), "transitions", List.of());
+    }
+
+    @When("she loads the file")
+    public void sheLoadsTheFile() {
+        acted = true;
+        response = as(sofia).body(file).post(DRAFTS + "/import");
+    }
+
+    @When("she loads a file that is not a workflow")
+    public void sheLoadsAFileThatIsNotAWorkflow() {
+        acted = true;
+        response = as(sofia)
+                .body(Map.of("title", "Lista de compras", "items", List.of("pão")))
+                .post(DRAFTS + "/import");
+    }
+
+    @Then("she has a new draft {string} with the path {string}, {string}")
+    public void sheHasANewDraft(String name, String first, String second) {
+        String loaded = response.then().statusCode(201).extract().path("id");
+        Assertions.assertThat(loaded).isNotEqualTo(draftId);
+        draftId = loaded;
+        load().then().body("name", equalTo(name)).body("steps.name", contains(first, second));
+    }
+
+    @Then("it is not created yet")
+    public void itIsNotCreatedYet() {
+        load().then().body("publishedVersion", nullValue());
+    }
+
+    @Then("the file is refused with {string}")
+    public void theFileIsRefusedWith(String message) {
+        response.then().statusCode(400).body("detail", equalTo(message));
+    }
+
+    @When("she loads the file in «Workflows» and creates the workflow")
+    public void sheLoadsTheFileInWorkflowsAndCreatesTheWorkflow() {
+        acted = true;
+        screen.signInAs("Sofia Almeida");
+        screen.loadWorkflowFile(JsonMapper.builder().build().writeValueAsString(file));
+        assertThat(screen.question()).containsText("Confira o workflow antes de o criar");
+        screen.goOn();
+    }
+
+    @Then("«Workflows» lists {string} as version {int}")
+    public void workflowsListsAsVersion(String name, int version) {
+        assertThat(screen.workflow(name)).containsText("Versão " + version);
     }
 
     /** The draft's path is these steps: built through the API before any When, then checked. */
