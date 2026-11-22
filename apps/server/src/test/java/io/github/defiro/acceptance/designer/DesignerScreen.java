@@ -107,6 +107,43 @@ final class DesignerScreen implements AutoCloseable {
                 .filter(new Locator.FilterOptions().setHasText(name));
     }
 
+    // ——— who handles each step (UC05)
+
+    /** «Revisão» under «Acrescentar um passo no fim»: the designer opens the new step's first screen */
+    void addReview() {
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(Pattern.compile("^Revisão")))
+                .click();
+        question().waitFor();
+    }
+
+    Locator stepName() {
+        return page.getByLabel(Pattern.compile("^Nome do passo"));
+    }
+
+    /** The cards of «Quem trata este passo?» */
+    Locator handlers() {
+        return page.getByRole(
+                        AriaRole.GROUP, new Page.GetByRoleOptions().setName(Pattern.compile("^Quem trata este passo")))
+                .getByRole(AriaRole.RADIO);
+    }
+
+    /** A card of «Quem trata este passo?», by the group's name: it reads the name, then its note */
+    Locator handler(String name) {
+        return handlers()
+                .and(page.getByRole(
+                        AriaRole.RADIO, new Page.GetByRoleOptions().setName(Pattern.compile("^" + name + " [A-Z]"))));
+    }
+
+    Locator fieldError(String message) {
+        return page.locator(".error-line").filter(new Locator.FilterOptions().setHasText(message));
+    }
+
+    /** A step of the path screen, by its name */
+    Locator pathStep(String name) {
+        return page.getByRole(
+                AriaRole.ARTICLE, new Page.GetByRoleOptions().setName(Pattern.compile(": " + name + "$")));
+    }
+
     // ——— the request form (UC04)
 
     private Locator formFields() {

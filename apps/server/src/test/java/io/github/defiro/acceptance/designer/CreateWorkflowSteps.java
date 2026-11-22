@@ -443,6 +443,19 @@ public class CreateWorkflowSteps {
         return load();
     }
 
+    /** A step of the path, by its name, as the browser holds it; changes are saved with saveDraft */
+    Map<String, Object> stepNamed(String name) {
+        return steps().stream()
+                .filter(step -> name.equals(step.get("name")))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    /** A request from Sofia's session (UC05 asks the Designer who can handle a step) */
+    RequestSpecification asSofia() {
+        return as(sofia);
+    }
+
     /** A review step with every answer, so that only what a scenario is about is missing */
     void completeThePath() {
         giveReasons("Validação da chefia", List.of("Preenchido incorretamente"), List.of("Pedido não autorizado"));
