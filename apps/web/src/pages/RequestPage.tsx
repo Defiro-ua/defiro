@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { approve, fileUrl, openRequest, release, type Opened, type ReviewRequest } from '../api/engine'
+import { approve, fileField, fileUrl, openRequest, release, type Note, type Opened, type ReviewRequest } from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { Flash, type Notice } from '../components/Flash'
@@ -11,6 +11,7 @@ import { cx } from '../lib/cx'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
 import { approvedNotice, approveFailed, dateTime, refusedNotice, releasedNotice, releaseFailed, type ReviewState } from '../review/notices'
+import { FieldNotes } from '../review/FieldNotes'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 
@@ -69,6 +70,27 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
   const headingRef = useRef<HTMLHeadingElement>(null)
   useFocusOnArrival(headingRef)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // The reviewer's own notes, by field (UC19)
+  const [notes, setNotes] = useState<Record<string, Note>>(() => Object.fromEntries(r.notes.map((n) => [n.field, n])))
+  const noteOn = (field: string, label: string) => (
+    <FieldNotes
+      task={r.task}
+      field={field}
+      label={label}
+      mine={notes[field]}
+      from={r.notesFrom.filter((n) => n.field === field)}
+      requester={r.requester.name}
+      onChange={(changed, note) =>
+        setNotes((all) => {
+          const next = { ...all }
+          if (note) next[changed] = note
+          else delete next[changed]
+          return next
+        })
+      }
+      onNotice={onRefused}
+    />
+  )
   const [approving, setApproving] = useState(false)
 
   const current = r.path.findIndex((s) => s.id === r.currentStep)
@@ -167,6 +189,7 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                       )}
                     </div>
                     {a.changed && <span className="text-[14px] leading-5 text-ink-3 tabular-nums">Antes: {a.previous || '—'}</span>}
+                    {noteOn(a.field, a.label)}
                   </dd>
                 </div>
               ))}
@@ -193,6 +216,7 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                     <Icon name="eye" size={16} />
                     Ver<span className="sr-only"> {f.filename}</span>
                   </a>
+                  <div className="flex basis-full flex-col gap-2">{noteOn(fileField(f.id), f.filename)}</div>
                 </li>
               ))}
             </ul>
@@ -237,6 +261,10 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
               <h2 id="titulo-decisao" className="m-0 text-title-lg font-semibold">
                 A sua decisão
               </h2>
+              <p className="m-0 flex items-start gap-2 text-[14px] leading-[21px] text-ink-2">
+                <Icon name="message" size={16} className="mt-px text-accent-ink" />
+                <span>{notesSummary(Object.keys(notes).length, r.requester.name)}</span>
+              </p>
               {/* UC18: returning and rejecting arrive with it */}
               <div className="flex flex-col gap-2.5" role="group" aria-label="Decisão">
                 <Button variant="secondary" icon="reset" className="w-full" disabled>
@@ -275,4 +303,11 @@ function stateText(r: ReviewRequest, current: number) {
   if (r.status === 'closed') return 'Concluído.'
   if (r.reviewer) return `Em revisão por ${r.reviewer}.`
   return current >= 0 ? `No passo «${r.path[current].name}», com ${r.path[current].handledBy}.` : '—'
+}
+
+// The prototype's summary of the reviewer's notes, in «A sua decisão»
+function notesSummary(n: number, requester: string) {
+  const first = requester.split(' ')[0]
+  if (n === 0) return 'Ainda não deixou notas. Use «Nota» junto de um campo para assinalar um problema.'
+  return `${n === 1 ? 'Deixou 1 nota.' : `Deixou ${n} notas.`} Se devolver, as notas vão para ${first} junto dos campos.`
 }

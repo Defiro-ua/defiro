@@ -32,9 +32,19 @@ export type ReviewRequest = {
   task: string | null
   /** Who took the current task, as «Rui Matos, Chefe de Divisão», or null */
   reviewer: string | null
+  /** This person's notes on the task they took, still theirs alone */
+  notes: Note[]
+  /** The notes the previous reviewer sent with their approval */
+  notesFrom: NoteFrom[]
 }
 
 export type Taken = { task: string; reference: string }
+
+/** A reviewer's note on a field of the request: an answer's field, or «file:» and a file's id (UC19) */
+export type Note = { field: string; label: string; text: string }
+
+/** A note sent with a decision, with who wrote it: «Rui Matos, Chefe de Divisão» */
+export type NoteFrom = Note & { author: string }
 
 /** Where the approved request went; no next step when it was the last */
 export type Approved = { task: string; reference: string; nextStep: string | null; handledBy: string | null; nextTask: string | null }
@@ -87,3 +97,22 @@ export const release = (task: string) => decide<Taken>(task, 'release')
 export const approve = (task: string) => decide<Approved>(task, 'approve')
 
 export const undoApproval = (task: string) => decide<Undone>(task, 'undo')
+
+const noteUrl = (task: string, field: string) => `/api/engine/tasks/${task}/notes/${encodeURIComponent(field)}`
+
+/** Writes the note on the field, new or changed */
+export async function saveNote(task: string, field: string, text: string): Promise<Note> {
+  const url = noteUrl(task, field)
+  const response = await send('PUT', url, { text })
+  if (!response.ok) throw unexpected('PUT', url, response)
+  return (await response.json()) as Note
+}
+
+export async function deleteNote(task: string, field: string): Promise<void> {
+  const url = noteUrl(task, field)
+  const response = await send('DELETE', url)
+  if (!response.ok) throw unexpected('DELETE', url, response)
+}
+
+/** The key of a note on a file */
+export const fileField = (file: string) => `file:${file}`

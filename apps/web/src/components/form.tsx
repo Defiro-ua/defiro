@@ -18,6 +18,18 @@ export function FieldError({ id, children, className }: { id?: string; children:
   )
 }
 
+/** A note someone left on a field, as the prototype shows it: «Nota de Rui Matos, Chefe de Divisão: …» */
+export function NoteFrom({ quem, texto }: { quem: string; texto: string }) {
+  return (
+    <p className="edge m-0 flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2.5 text-[14px] leading-[21px] text-ink">
+      <Icon name="message" size={16} className="mt-0.5" />
+      <span>
+        <strong className="font-semibold">Nota de {quem}:</strong> {texto}
+      </span>
+    </p>
+  )
+}
+
 /** What stops the person from moving on, at the top of the step */
 export function StepError({ children, extra }: { children: ReactNode; extra?: ReactNode }) {
   return (

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +15,8 @@ vi.mock('../api/engine', async (original) => ({
   approve: vi.fn(),
   take: vi.fn(),
   release: vi.fn(),
+  saveNote: vi.fn(),
+  deleteNote: vi.fn(),
   undoApproval: vi.fn(),
 }))
 
@@ -48,6 +50,8 @@ const request: ReviewRequest = {
   history: [{ at: '2026-11-18T16:02:00Z', text: 'Ana Ferreira, Técnica Superior, submeteu o pedido' }],
   task: 't1',
   reviewer: 'Rui Matos, Chefe de Divisão',
+  notes: [],
+  notesFrom: [],
 }
 
 const waiting: api.InboxItem = {
@@ -209,6 +213,137 @@ describe('the inbox (until UC27)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
 
     expect(await screen.findByText('Não foi possível desfazer')).toBeInTheDocument()
+  })
+})
+
+describe('the notes on the fields (UC19)', () => {
+  const note = 'Indicou 10/11/2026; o certificado de presença diz 09/11/2026.'
+  const other = 'Falta o certificado de presença com o carimbo da entidade formadora.'
+
+  it('saves a new note on a field, with «Nota guardada», and counts it in the decision', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    vi.mocked(api.saveNote).mockResolvedValue({ field: 'regresso', label: 'Regresso', text: note })
+    openAt('/pedidos/AC-2026-0147')
+
+    expect(await screen.findByText(/^Ainda não deixou notas\./)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^Nota\s*sobre Regresso$/ }))
+    const box = screen.getByRole('textbox', { name: /^Nota sobre «Regresso»/ })
+    expect(box).toHaveAttribute('maxlength', '1000')
+    await userEvent.type(box, note)
+    expect(screen.getByText(`${note.length} de 1000 caracteres`)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar nota' }))
+
+    expect(api.saveNote).toHaveBeenCalledWith('t1', 'regresso', note)
+    expect(await screen.findByText('Nota guardada')).toBeInTheDocument()
+    expect(screen.getByText(note)).toBeInTheDocument()
+    expect(screen.getByText('Deixou 1 nota. Se devolver, as notas vão para Ana junto dos campos.')).toBeInTheDocument()
+  })
+
+  it('does not save an empty note: the error shows next to it and in a notice, and the box stays open', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Nota\s*sobre Regresso$/ }))
+    await userEvent.type(screen.getByRole('textbox', { name: /^Nota sobre «Regresso»/ }), '   ')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar nota' }))
+
+    const error = 'Escreva a nota antes de guardar. Se já não precisa dela, carregue em «Cancelar».'
+    expect(within(screen.getByRole('alert')).getByText(error)).toBeInTheDocument()
+    // and, once the notice is up, at the top too
+    await waitFor(() => expect(screen.getAllByText(error)).toHaveLength(2))
+    expect(screen.getByRole('textbox', { name: /^Nota sobre «Regresso»/ })).toBeInTheDocument()
+    expect(api.saveNote).not.toHaveBeenCalled()
+  })
+
+  it('changes a note, with «Nota alterada»', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, notes: [{ field: 'regresso', label: 'Regresso', text: note }] } })
+    vi.mocked(api.saveNote).mockResolvedValue({ field: 'regresso', label: 'Regresso', text: other })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Editar nota\s*sobre Regresso$/ }))
+    const box = screen.getByRole('textbox', { name: /^Nota sobre «Regresso»/ })
+    await userEvent.clear(box)
+    await userEvent.type(box, other)
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar nota' }))
+
+    expect(await screen.findByText('Nota alterada')).toBeInTheDocument()
+    expect(screen.getByText(other)).toBeInTheDocument()
+  })
+
+  it('cancels the editor, keeping the note as it was', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, notes: [{ field: 'regresso', label: 'Regresso', text: note }] } })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Editar nota/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByText(note)).toBeInTheDocument()
+  })
+
+  it('asks before deleting a note, naming the requester, then deletes it with «Nota apagada»', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, notes: [{ field: 'regresso', label: 'Regresso', text: note }] } })
+    vi.mocked(api.deleteNote).mockResolvedValue()
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Apagar\s*a nota sobre Regresso$/ }))
+    expect(screen.getByText('Apagar a nota sobre «Regresso»? Ana Ferreira deixa de a ver se devolver o pedido.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Apagar a nota' }))
+
+    expect(api.deleteNote).toHaveBeenCalledWith('t1', 'regresso')
+    expect(await screen.findByText('Nota apagada')).toBeInTheDocument()
+    expect(screen.queryByText(note)).not.toBeInTheDocument()
+  })
+
+  it('keeps the note when the deletion is cancelled', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, notes: [{ field: 'regresso', label: 'Regresso', text: note }] } })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Apagar\s*a nota/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(api.deleteNote).not.toHaveBeenCalled()
+    expect(screen.getByText(note)).toBeInTheDocument()
+  })
+
+  it('says so when a note cannot be saved or deleted', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, notes: [{ field: 'regresso', label: 'Regresso', text: note }] } })
+    vi.mocked(api.saveNote).mockRejectedValue(new Error('PUT answered 500'))
+    vi.mocked(api.deleteNote).mockRejectedValue(new Error('DELETE answered 500'))
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Editar nota/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar nota' }))
+    expect(await screen.findByText('Não foi possível guardar a nota')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Apagar\s*a nota/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Apagar a nota' }))
+    expect(await screen.findByText('Não foi possível apagar a nota')).toBeInTheDocument()
+  })
+
+  it('takes notes on each file too', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    vi.mocked(api.saveNote).mockResolvedValue({ field: 'file:f1', label: 'bilhete_comboio.pdf', text: other })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Nota\s*sobre bilhete_comboio\.pdf$/ }))
+    await userEvent.type(screen.getByRole('textbox', { name: /^Nota sobre «bilhete_comboio\.pdf»/ }), other)
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar nota' }))
+
+    expect(api.saveNote).toHaveBeenCalledWith('t1', 'file:f1', other)
+  })
+
+  it('shows the previous reviewer’s notes next to their fields, and no «Nota» to whoever only looks', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({
+      found: true,
+      request: { ...request, task: null, notesFrom: [{ field: 'regresso', label: 'Regresso', text: note, author: 'Rui Matos, Chefe de Divisão' }] },
+    })
+    openAt('/pedidos/AC-2026-0147')
+
+    expect(await screen.findByText('Nota de Rui Matos, Chefe de Divisão:')).toBeInTheDocument()
+    expect(screen.getByText(note)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Nota/ })).not.toBeInTheDocument()
   })
 })
 

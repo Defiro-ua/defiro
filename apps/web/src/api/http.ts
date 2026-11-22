@@ -13,7 +13,7 @@ function cookie(name: string): string {
 }
 
 /** A request to the server with the session, and JSON both ways */
-export function send(method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown): Promise<Response> {
+export function send(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<Response> {
   const write = method !== 'GET'
   return fetch(url, {
     method,
