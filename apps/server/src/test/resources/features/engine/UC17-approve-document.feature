@@ -57,6 +57,9 @@ Feature: Approve a document
     # The history section, closed by default with «Ver histórico», is shown as in the prototype;
     # its own rules (order, entries never change, who sees it) are UC25 (Bernardo).
     # Opening the request in one click from the inbox is checked by the browser journey below.
+    # open question (team): the API answers 403 to someone who takes no part in the request and 404
+    #                to an unknown reference, so it tells them the request exists, and references
+    #                are sequential. The web app shows both alike. Should the API answer 404 to both?
 
     Scenario: The request shows its data and files
       When Rui Matos opens the request "AC-2026-0147"
@@ -121,6 +124,8 @@ Feature: Approve a document
     # open question (Candeias, UC05): the Designer keeps the group's name, but Entra ID puts each
     #                group's id in the token. How does the Engine match the two?
     # Returning to the inbox is checked by the browser journey below.
+    # open question (team): may a reviewer decide their own request? If Rui Matos makes one, he is
+    #                one of «Chefias da unidade do requerente» for himself, and nothing stops him.
 
     Scenario Outline: Every candidate of the step, and only they, have the task in their inbox
       When <person> looks at the inbox
