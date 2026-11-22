@@ -22,5 +22,11 @@ export const refusedNotice = (reason: string): Notice => ({ tom: 'warn', titulo:
 export const undoFailed: Notice = { tom: 'bad', titulo: 'Não foi possível desfazer', texto: 'Tente outra vez daqui a pouco.' }
 export const approveFailed: Notice = { tom: 'bad', titulo: 'Não foi possível aprovar', texto: 'Tente outra vez daqui a pouco.' }
 
-/** «22/11/2026, 18:32», in the organization's time */
-export const dateTime = (iso: string) => new Date(iso).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })
+/** «22/11/2026 18:32», in the organization's time, as the prototype shows dates (fmtDateTime) */
+export function dateTime(iso: string) {
+  const at = new Date(iso)
+  const zone = { timeZone: 'Europe/Lisbon' } as const
+  const day = at.toLocaleDateString('pt-PT', { ...zone, day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = at.toLocaleTimeString('pt-PT', { ...zone, hour: '2-digit', minute: '2-digit' })
+  return `${day} ${time}`
+}
