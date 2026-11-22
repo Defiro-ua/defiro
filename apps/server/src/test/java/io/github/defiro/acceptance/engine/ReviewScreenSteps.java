@@ -51,7 +51,7 @@ public class ReviewScreenSteps {
     @When("{person} reviews the request {string}")
     public void reviewsTheRequest(String person, String reference) {
         browser.signIn(person);
-        page.navigate("/pedidos/" + reference);
+        rever(reference).click();
         decision().waitFor();
     }
 
@@ -59,9 +59,7 @@ public class ReviewScreenSteps {
     public void approvesFromTheInbox(String person, String reference) {
         browser.signIn(person);
         clicks = 0;
-        click(page.getByRole(
-                AriaRole.LINK,
-                new Page.GetByRoleOptions().setName(Pattern.compile("^Rever\\s*o pedido " + reference + " "))));
+        click(rever(reference));
         click(button("Aprovar"));
         page.waitForURL("**/caixa-de-tarefas");
     }
@@ -70,6 +68,22 @@ public class ReviewScreenSteps {
     public void approvedFromTheInbox(String person, String reference) {
         approvesFromTheInbox(person, reference);
         assertThat(notice("Pedido aprovado")).isVisible();
+    }
+
+    @When("{person} chooses «Ver» on it in her inbox")
+    public void choosesVerInHerInbox(String person) {
+        browser.signIn(person);
+        page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName(Pattern.compile("^Ver\\s*o pedido ")))
+                .click();
+        page.waitForURL("**/pedidos/**");
+    }
+
+    @Then("her screen shows «{}», with no decision")
+    public void herScreenShows(String text) {
+        assertThat(page.getByRole(AriaRole.REGION, new Page.GetByRoleOptions().setName("Estado")))
+                .containsText(text);
+        assertThat(decision()).hasCount(0);
+        assertThat(button("Aprovar")).hasCount(0);
     }
 
     @When("{int} seconds go by")
@@ -118,6 +132,13 @@ public class ReviewScreenSteps {
         assertThat(page).hasURL(Pattern.compile(".*/pedidos/" + reference + "$"));
         assertThat(notice(text)).isVisible();
         assertThat(button("Aprovar")).isEnabled();
+    }
+
+    // «Rever» in the inbox: it takes the task and opens the request
+    private Locator rever(String reference) {
+        return page.getByRole(
+                AriaRole.BUTTON,
+                new Page.GetByRoleOptions().setName(Pattern.compile("^Rever\\s*o pedido " + reference + " ")));
     }
 
     private void click(Locator target) {
