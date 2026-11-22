@@ -58,6 +58,10 @@ class Requests {
     /** A file, with the version of the request it was attached in. */
     record File(UUID id, String filename, int version) {}
 
+    /**
+     * The request as this person sees it. The task is the one they may decide now, as a candidate
+     * of the current step, or null.
+     */
     record Request(
             String reference,
             String workflow,
@@ -68,7 +72,8 @@ class Requests {
             RequestData.Requester requester,
             List<Answer> answers,
             List<File> files,
-            List<History.Line> history) {}
+            List<History.Line> history,
+            UUID task) {}
 
     /** The request, or empty if there is none with this reference. */
     Optional<Request> open(String reference, Person person) {
@@ -76,7 +81,7 @@ class Requests {
             RequestData request = procedures.request(procedure.id());
             WorkflowSpecification specification = specification(procedure);
             List<AuditLog.Entry> entries = auditLog.of(procedure.id());
-            mustTakePart(procedure, request, specification, entries, person);
+            Optional<UUID> task = mustTakePart(procedure, request, specification, entries, person);
             List<Resubmission> resubmissions = entries.stream()
                     .filter(entry -> Resubmission.ACTION.equals(entry.action()))
                     .map(entry -> json.convertValue(entry.details(), Resubmission.class))
@@ -93,7 +98,8 @@ class Requests {
                     request.requester(),
                     answers(request, resubmissions),
                     files(procedure, resubmissions),
-                    entries.stream().map(History::of).toList());
+                    entries.stream().map(History::of).toList(),
+                    task.orElse(null));
         });
     }
 
@@ -143,22 +149,29 @@ class Requests {
         return files.content(file);
     }
 
-    private void mustTakePart(
+    /**
+     * The open task of the request this person may decide, if any. Anyone else who takes no part
+     * in the request may not open it.
+     */
+    private Optional<UUID> mustTakePart(
             Procedure procedure,
             RequestData request,
             WorkflowSpecification specification,
             List<AuditLog.Entry> entries,
             Person person) {
+        Optional<UUID> task = tasks.openOf(procedure.id()).stream()
+                .filter(open -> candidates.canHandle(
+                        step(specification, open.step()).handledBy(),
+                        request.requester().unit(),
+                        person))
+                .map(Tasks.OpenTask::id)
+                .findFirst();
         boolean requester = procedure.requester().equals(person.id());
         boolean actedOnIt = entries.stream().anyMatch(entry -> person.id().equals(entry.actor()));
-        boolean candidate = tasks.openOf(procedure.id()).stream()
-                .anyMatch(task -> candidates.canHandle(
-                        step(specification, task.step()).handledBy(),
-                        request.requester().unit(),
-                        person));
-        if (!requester && !actedOnIt && !candidate) {
+        if (!requester && !actedOnIt && task.isEmpty()) {
             throw new NotAllowedException();
         }
+        return task;
     }
 
     private WorkflowSpecification specification(Procedure procedure) {

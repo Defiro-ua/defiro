@@ -72,7 +72,14 @@ class RequestsIT {
     @Test
     void aCandidateOfTheCurrentStepOpensIt() {
         assertThat(requests.open(reference, person("carla", "Divisão Financeira")))
-                .isPresent();
+                .hasValueSatisfying(opened ->
+                        assertThat(opened.task()).as("the task she may decide").isEqualTo(submitted.task()));
+    }
+
+    @Test
+    void theRequesterHasNoTaskToDecide() {
+        assertThat(requests.open(reference, person("ana", "Divisão de Obras Municipais")))
+                .hasValueSatisfying(opened -> assertThat(opened.task()).isNull());
     }
 
     @Test
