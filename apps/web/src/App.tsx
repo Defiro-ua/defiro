@@ -1,7 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { SignedIn } from './components/SignedIn'
 import { DesignerPage } from './pages/DesignerPage'
+import { InboxPage } from './pages/InboxPage'
 import { LoginPage } from './pages/LoginPage'
+import { RequestPage } from './pages/RequestPage'
 import { ScreenToComePage } from './pages/ScreenToComePage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
 import { paths } from './routes'
@@ -12,7 +14,8 @@ export function App() {
     <Routes>
       <Route path={paths.login} element={<LoginPage />} />
       <Route element={<SignedIn />}>
-        <Route path={paths.inbox} element={<ScreenToComePage item="inbox" />} />
+        <Route path={paths.inbox} element={<InboxPage />} />
+        <Route path="/pedidos/:reference" element={<RequestPage />} />
         <Route path={paths.newRequest} element={<ScreenToComePage item="new-request" />} />
         <Route path={paths.workflows} element={<WorkflowsPage />} />
         <Route path={paths.designer} element={<DesignerPage />} />

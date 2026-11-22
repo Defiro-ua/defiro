@@ -5,4 +5,6 @@ export const paths = {
   newRequest: '/novo-pedido',
   workflows: '/workflows',
   designer: '/workflows/criar',
+  /** A request, by its reference (UC17) */
+  request: (reference: string) => `/pedidos/${encodeURIComponent(reference)}`,
 } as const
