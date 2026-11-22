@@ -162,9 +162,8 @@ export function FieldEditor({
                 onChange={() => change({ t: 'field', field: q.id, patch: { type: a.type } })}
                 className={cx(radioClass, 'mt-0.5')}
               />
-              <span className="flex flex-col gap-0.5">
-                <span className="text-[15px] leading-[21px] font-semibold">{a.name}</span>
-                <span className="text-label-sm leading-[18px] text-ink-3">{a.example}</span>
+              <span className="text-[15px] leading-[21px] font-semibold">
+                {a.name} <span className="mt-0.5 block text-label-sm leading-[18px] font-normal text-ink-3">{a.example}</span>
               </span>
             </label>
           ))}
@@ -201,9 +200,9 @@ export function FieldEditor({
           onChange={(e) => change({ t: 'field', field: q.id, patch: { required: e.target.checked } })}
           className={radioClass}
         />
-        <span className="flex flex-col gap-0.5">
-          <span className="text-[15px] leading-[21px] font-semibold">Resposta obrigatória</span>
-          <span className="text-label-sm leading-[18px] text-ink-3">O requerente não pode avançar sem responder.</span>
+        <span className="text-[15px] leading-[21px] font-semibold">
+          Resposta obrigatória{' '}
+          <span className="mt-0.5 block text-label-sm leading-[18px] font-normal text-ink-3">O requerente não pode avançar sem responder.</span>
         </span>
       </label>
     </div>

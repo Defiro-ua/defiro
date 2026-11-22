@@ -143,10 +143,16 @@ final class DesignerScreen implements AutoCloseable {
                 .getByRole(AriaRole.RADIO);
     }
 
-    /** The card of an answer type, by its name: «Data» is not «Data e hora» */
+    /**
+     * The card of an answer type, by its name: the card reads its name, then its example, which
+     * starts with a capital, so «Data» is not «Data e hora». Playwright reads the pattern as
+     * JavaScript: no Pattern.quote, which no answer type needs
+     */
     Locator answerType(String name) {
-        return page.getByRole(AriaRole.GROUP, new Page.GetByRoleOptions().setName(Pattern.compile("^Tipo de resposta")))
-                .getByText(name, new Locator.GetByTextOptions().setExact(true));
+        return answerTypes()
+                .and(page.getByRole(
+                        AriaRole.RADIO,
+                        new Page.GetByRoleOptions().setName(Pattern.compile("^" + name + " [A-ZÁÉÍÓÚ]"))));
     }
 
     Locator mandatory() {
