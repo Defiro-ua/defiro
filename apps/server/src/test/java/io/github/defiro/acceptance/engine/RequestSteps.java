@@ -9,9 +9,9 @@ import io.github.defiro.FakeEntraId.Account;
 import io.github.defiro.engine.deployment.Deployment;
 import io.github.defiro.engine.deployment.Publication;
 import io.github.defiro.engine.internal.ProcedureSeed;
-import io.github.defiro.engine.internal.ProcedureSeed.Answer;
-import io.github.defiro.engine.internal.ProcedureSeed.Requester;
 import io.github.defiro.engine.internal.ProcedureSeed.Submitted;
+import io.github.defiro.engine.internal.RequestData.Answer;
+import io.github.defiro.engine.internal.RequestData.Requester;
 import io.github.defiro.spec.PluginRef;
 import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.Transition;
@@ -53,6 +53,7 @@ public class RequestSteps {
     private final FakeEntraId entraId = FakeEntraId.instance();
     private final Map<String, Deployed> workflows = new HashMap<>();
     private final Map<String, byte[]> attached = new LinkedHashMap<>();
+    private final Map<String, UUID> fileIds = new HashMap<>();
     private Submitted request;
 
     @Autowired
@@ -110,6 +111,12 @@ public class RequestSteps {
         attach(otherFile);
     }
 
+    /** The id the Engine gave a file of the request when it was attached. */
+    UUID fileId(String filename) {
+        attached(filename);
+        return fileIds.get(filename);
+    }
+
     /** The bytes a file of the request was attached with. */
     byte[] attached(String filename) {
         byte[] content = attached.get(filename);
@@ -121,7 +128,7 @@ public class RequestSteps {
         assertThat(request).as("a submitted request").isNotNull();
         // Stands for the file's bytes: the tests only check they come back the same.
         byte[] content = ("Conteúdo de " + filename).getBytes(StandardCharsets.UTF_8);
-        seed.attach(request, filename, content);
+        fileIds.put(filename, seed.attach(request, filename, content));
         attached.put(filename, content);
     }
 

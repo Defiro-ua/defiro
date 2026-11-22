@@ -2,7 +2,10 @@ package io.github.defiro.engine.internal;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -48,15 +51,26 @@ class Files {
     Optional<StoredFile> find(UUID file) {
         return jdbc.sql("""
                         select id, procedure_id, document_id, filename, sha256
-                        from engine.file where id = :id""")
-                .param("id", file)
-                .query((row, n) -> new StoredFile(
-                        row.getObject("id", UUID.class),
-                        row.getObject("procedure_id", UUID.class),
-                        row.getObject("document_id", UUID.class),
-                        row.getString("filename"),
-                        row.getString("sha256")))
-                .optional();
+                        from engine.file where id = :id""").param("id", file).query(Files::storedFile).optional();
+    }
+
+    /** The files of a procedure, by name. */
+    List<StoredFile> of(UUID procedure) {
+        return jdbc.sql("""
+                        select id, procedure_id, document_id, filename, sha256
+                        from engine.file where procedure_id = :procedure order by filename""")
+                .param("procedure", procedure)
+                .query(Files::storedFile)
+                .list();
+    }
+
+    private static StoredFile storedFile(ResultSet row, int n) throws SQLException {
+        return new StoredFile(
+                row.getObject("id", UUID.class),
+                row.getObject("procedure_id", UUID.class),
+                row.getObject("document_id", UUID.class),
+                row.getString("filename"),
+                row.getString("sha256"));
     }
 
     /** The bytes of the file, as they were attached. */

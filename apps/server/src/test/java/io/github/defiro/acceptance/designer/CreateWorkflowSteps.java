@@ -15,6 +15,7 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import io.github.defiro.FakeEntraId;
 import io.github.defiro.FakeEntraId.Account;
+import io.github.defiro.acceptance.AccessSteps;
 import io.github.defiro.acceptance.Browser;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -53,6 +55,10 @@ public class CreateWorkflowSteps {
     private String lastStep;
     private DesignerScreen screen;
     private boolean acted;
+
+    // «she is not allowed to» is shared with the other stories.
+    @Autowired
+    AccessSteps access;
 
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
@@ -97,16 +103,13 @@ public class CreateWorkflowSteps {
     @When("she starts designing the workflow {string}")
     public void sheStartsDesigningTheWorkflow(String name) {
         response = as(ana).body(Map.of("name", name)).post(DRAFTS);
+        access.answered(response);
     }
 
     @When("she tries to create the workflow Sofia Almeida is designing")
     public void sheTriesToCreateTheWorkflowSofiaIsDesigning() {
         response = as(ana).post(DRAFTS + "/" + draftId + "/publish");
-    }
-
-    @Then("she is not allowed to")
-    public void sheIsNotAllowedTo() {
-        response.then().statusCode(403);
+        access.answered(response);
     }
 
     @When("she adds the review step {string} handled by {string} with a deadline of {int} working days")

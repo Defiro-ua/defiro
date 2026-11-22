@@ -54,7 +54,16 @@ class Tasks {
 
     /** Every open task, the oldest request first. */
     List<OpenTask> open() {
-        return jdbc.sql("""
+        return open("", null);
+    }
+
+    /** The open tasks of a procedure. */
+    List<OpenTask> openOf(UUID procedure) {
+        return open("and t.procedure_id = :procedure", procedure);
+    }
+
+    private List<OpenTask> open(String andWhere, UUID procedure) {
+        var query = jdbc.sql("""
                         select t.id, t.procedure_id, p.reference, t.step_id, p.draft, p.version,
                                r.data -> 'requester' ->> 'name' as requester_name,
                                r.data -> 'requester' ->> 'unit' as requester_unit
@@ -64,10 +73,12 @@ class Tasks {
                             select data from engine.document d
                             where d.procedure_id = p.id
                             order by d.updated_at limit 1) r
-                        where t.status = :status
-                        order by p.created_at""")
-                .param("status", OPEN)
-                .query((row, n) -> new OpenTask(
+                        where t.status = :status %s
+                        order by p.created_at""".formatted(andWhere)).param("status", OPEN);
+        if (procedure != null) {
+            query = query.param("procedure", procedure);
+        }
+        return query.query((row, n) -> new OpenTask(
                         row.getObject("id", UUID.class),
                         row.getObject("procedure_id", UUID.class),
                         row.getString("reference"),

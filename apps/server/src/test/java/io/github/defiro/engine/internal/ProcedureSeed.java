@@ -14,9 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Engine will, so the review stories (UC17, UC18, UC19) can run before UC13 exists. When UC13 does,
  * the acceptance tests submit through it and this class goes away.
  *
- * <p>The document keeps the requester as Entra ID gave them (the «Requerente» section of the
- * prototype) and the answers as {field, label, value}, with the prototype's field keys. That format
- * is still to be agreed with Dinis (UC13) and Candeias (UC04).
+ * <p>The document keeps what {@link RequestData} says.
  */
 @Component
 public class ProcedureSeed {
@@ -33,11 +31,6 @@ public class ProcedureSeed {
         this.tasks = tasks;
     }
 
-    /** The person who made the request, as Entra ID knew them at the time. */
-    public record Requester(String id, String name, String jobTitle, String unit, String manager) {}
-
-    public record Answer(String field, String label, String value) {}
-
     public record Submitted(UUID procedure, UUID document) {}
 
     /**
@@ -51,8 +44,8 @@ public class ProcedureSeed {
             int version,
             String requestStep,
             StepSpecification nextStep,
-            Requester requester,
-            List<Answer> answers) {
+            RequestData.Requester requester,
+            List<RequestData.Answer> answers) {
         forget(reference);
         Submitted submitted = new Submitted(UUID.randomUUID(), UUID.randomUUID());
         jdbc.sql("""
@@ -71,7 +64,7 @@ public class ProcedureSeed {
                 .param("id", submitted.document())
                 .param("procedure", submitted.procedure())
                 .param("step", requestStep)
-                .param("data", json.writeValueAsString(Map.of("requester", requester, "answers", answers)))
+                .param("data", json.writeValueAsString(new RequestData(requester, answers)))
                 .update();
         jdbc.sql("""
                         insert into engine.audit_log (actor_id, procedure_id, action, entity_type, entity_id, details)
