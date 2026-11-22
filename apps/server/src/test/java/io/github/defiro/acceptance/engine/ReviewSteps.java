@@ -2,12 +2,19 @@ package io.github.defiro.acceptance.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.cucumber.datatable.DataTable;
+import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import io.github.defiro.acceptance.AccessSteps;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -20,8 +27,13 @@ public class ReviewSteps {
     private static final String PROCEDURES = "/api/engine/procedures/";
 
     private final People people = new People();
+    // The task of each step, by the step's name, as the request reaches it.
+    private final Map<String, UUID> tasks = new HashMap<>();
     private Response response;
     private String openedFile;
+    private String reference;
+    private Instant actedFrom;
+    private Instant actedTo;
 
     @Autowired
     RequestSteps requests;
@@ -45,6 +57,62 @@ public class ReviewSteps {
         openedFile = filename;
         response = people.of(person).request().get(PROCEDURES + reference + "/files/" + requests.fileId(filename));
         access.answered(response);
+    }
+
+    @When("{person} approves the request {string}")
+    public void approvesTheRequest(String person, String reference) {
+        approve(person, reference, requests.waitingAt());
+    }
+
+    @Given("{person} approved the request {string}")
+    public void approvedTheRequest(String person, String reference) {
+        approve(person, reference, requests.waitingAt());
+        assertThat(response.statusCode()).as(person + " approves").isEqualTo(200);
+    }
+
+    @Then("the request is at {string}, in the inbox of {person}")
+    public void theRequestIsAt(String step, String person) {
+        assertThat(currentStep()).isEqualTo(step);
+        assertThat(inboxOf(person)).contains(reference);
+    }
+
+    @Then("the request is still at {string}")
+    public void theRequestIsStillAt(String step) {
+        assertThat(currentStep()).isEqualTo(step);
+    }
+
+    @Then("it is no longer in the inbox of {person} or {person}")
+    public void itIsNoLongerInTheInboxOf(String person, String otherPerson) {
+        assertThat(inboxOf(person)).doesNotContain(reference);
+        assertThat(inboxOf(otherPerson)).doesNotContain(reference);
+    }
+
+    @Then("^(?:s?he) is told «(.+)»$")
+    public void isTold(String text) {
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(response.jsonPath().getString("detail")).isEqualTo(text);
+    }
+
+    @Then("the request was approved only once")
+    public void theRequestWasApprovedOnlyOnce() {
+        String approval = "aprovou o passo «" + requests.waitingAt() + "»";
+        assertThat(history().stream().filter(line -> line.endsWith(approval))).hasSize(1);
+    }
+
+    @Then("the newest entries of its history, with the date and time of the approval, are")
+    public void theNewestEntriesOfItsHistoryAre(DataTable entries) {
+        List<String> expected =
+                entries.asMaps().stream().map(row -> row.get("entry")).toList();
+        JsonPath request = requestAs(requests.requester());
+        List<String> texts = request.getList("history.text", String.class);
+        List<String> times = request.getList("history.at", String.class);
+        int newest = texts.size() - 1;
+        for (int k = 0; k < expected.size(); k++) {
+            assertThat(texts.get(newest - k)).isEqualTo(expected.get(k));
+            assertThat(OffsetDateTime.parse(times.get(newest - k)).toInstant())
+                    .as("the date and time of " + expected.get(k))
+                    .isBetween(actedFrom.minusSeconds(1), actedTo.plusSeconds(1));
+        }
     }
 
     @Then("^the request \"([^\"]+)\" is (there|not there)$")
@@ -90,6 +158,51 @@ public class ReviewSteps {
     public void getsTheContentAttached(String person) {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.asByteArray()).isEqualTo(requests.attached(openedFile));
+    }
+
+    private void approve(String person, String reference, String step) {
+        this.reference = reference;
+        actedFrom = Instant.now();
+        response = people.of(person).request().post("/api/engine/tasks/" + taskOf(step) + "/approve");
+        actedTo = Instant.now();
+        access.answered(response);
+        if (response.statusCode() == 200 && response.jsonPath().getString("nextStep") != null) {
+            tasks.put(
+                    response.jsonPath().getString("nextStep"),
+                    UUID.fromString(response.jsonPath().getString("nextTask")));
+        }
+    }
+
+    private UUID taskOf(String step) {
+        if (tasks.isEmpty()) {
+            tasks.put(requests.waitingAt(), requests.task());
+        }
+        UUID task = tasks.get(step);
+        assertThat(task).as("the task of the step " + step).isNotNull();
+        return task;
+    }
+
+    // The request as its requester sees it: they always take part in it.
+    private JsonPath requestAs(String person) {
+        Response request = people.of(person).request().get(PROCEDURES + reference);
+        assertThat(request.statusCode()).isEqualTo(200);
+        return request.jsonPath();
+    }
+
+    private String currentStep() {
+        JsonPath request = requestAs(requests.requester());
+        String id = request.getString("currentStep");
+        return request.getString("path.find { it.id == '%s' }.name".formatted(id));
+    }
+
+    private List<String> history() {
+        return requestAs(requests.requester()).getList("history.text", String.class);
+    }
+
+    private List<String> inboxOf(String person) {
+        Response inbox = people.of(person).request().get(INBOX);
+        assertThat(inbox.statusCode()).isEqualTo(200);
+        return inbox.jsonPath().getList("reference", String.class);
     }
 
     private JsonPath request() {

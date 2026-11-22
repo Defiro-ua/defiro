@@ -41,6 +41,29 @@ class Procedures {
                 .optional();
     }
 
+    Optional<Procedure> find(UUID id) {
+        return jdbc.sql("select reference from engine.procedure where id = :id")
+                .param("id", id)
+                .query(String.class)
+                .optional()
+                .flatMap(this::find);
+    }
+
+    /** The procedure waits at this step now. */
+    void moveTo(UUID procedure, String step) {
+        jdbc.sql("update engine.procedure set current_step_id = :step where id = :id")
+                .param("step", step)
+                .param("id", procedure)
+                .update();
+    }
+
+    /** The procedure went through its whole path. */
+    void close(UUID procedure) {
+        jdbc.sql("""
+                        update engine.procedure set current_step_id = null, status = 'closed', closed_at = now()
+                        where id = :id""").param("id", procedure).update();
+    }
+
     /** The request: the document of the procedure's first step. */
     RequestData request(UUID procedure) {
         String data =

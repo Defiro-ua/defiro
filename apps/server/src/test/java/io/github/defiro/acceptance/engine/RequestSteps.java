@@ -55,6 +55,8 @@ public class RequestSteps {
     private final Map<String, byte[]> attached = new LinkedHashMap<>();
     private final Map<String, UUID> fileIds = new HashMap<>();
     private Submitted request;
+    private String requester;
+    private String waitingAt;
 
     @Autowired
     Deployment deployment;
@@ -103,12 +105,28 @@ public class RequestSteps {
                 answers.asMaps().stream()
                         .map(row -> new Answer(field(row.get("field")), row.get("field"), row.get("answer")))
                         .toList());
+        requester = person;
+        waitingAt = steps.get(1).name();
     }
 
     @Given("with the files {string} and {string}")
     public void withTheFiles(String file, String otherFile) {
         attach(file);
         attach(otherFile);
+    }
+
+    /** Who submitted the request. */
+    String requester() {
+        return requester;
+    }
+
+    /** The step the submitted request waits at, and its task. */
+    String waitingAt() {
+        return waitingAt;
+    }
+
+    UUID task() {
+        return request.task();
     }
 
     /** The id the Engine gave a file of the request when it was attached. */

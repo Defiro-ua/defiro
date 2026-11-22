@@ -2,6 +2,7 @@ package io.github.defiro.engine.internal;
 
 import io.github.defiro.spec.StepSpecification;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Repository;
 class Tasks {
 
     static final String OPEN = "open";
+    static final String DONE = "done";
 
     private final JdbcClient jdbc;
     private final Candidates candidates;
@@ -36,6 +38,42 @@ class Tasks {
             int version,
             String requesterName,
             String requesterUnit) {}
+
+    /** A task as it is now: open, or done with the decision taken. */
+    record Task(UUID id, UUID procedure, String step, String status, String decision) {
+
+        boolean isOpen() {
+            return OPEN.equals(status);
+        }
+    }
+
+    Optional<Task> find(UUID id) {
+        return jdbc.sql("select id, procedure_id, step_id, status, decision from engine.task where id = :id")
+                .param("id", id)
+                .query((row, n) -> new Task(
+                        row.getObject("id", UUID.class),
+                        row.getObject("procedure_id", UUID.class),
+                        row.getString("step_id"),
+                        row.getString("status"),
+                        row.getString("decision")))
+                .optional();
+    }
+
+    /**
+     * Closes the task with the decision, if it is still open. Only one of two people deciding at
+     * the same time gets true: the first to act wins.
+     */
+    boolean decide(UUID id, String decision) {
+        return jdbc.sql("""
+                                update engine.task set status = :done, decision = :decision, decided_at = now()
+                                where id = :id and status = :open""")
+                        .param("done", DONE)
+                        .param("decision", decision)
+                        .param("id", id)
+                        .param("open", OPEN)
+                        .update()
+                == 1;
+    }
 
     /** Opens the task of a step for its candidates. */
     UUID open(UUID procedure, StepSpecification step) {

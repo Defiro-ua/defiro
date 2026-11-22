@@ -108,7 +108,7 @@ class RequestsIT {
                 .param("other", reference + "-b")
                 .param("reference", reference)
                 .update();
-        UUID file = seed.attach(new ProcedureSeed.Submitted(elsewhere, null), "fatura_hotel.pdf", new byte[] {1});
+        UUID file = seed.attach(new ProcedureSeed.Submitted(elsewhere, null, null), "fatura_hotel.pdf", new byte[] {1});
 
         assertThat(requests.file(reference, file, person("ana", "Divisão de Obras Municipais")))
                 .isEmpty();

@@ -31,7 +31,8 @@ public class ProcedureSeed {
         this.tasks = tasks;
     }
 
-    public record Submitted(UUID procedure, UUID document) {}
+    /** The submitted request, and the task of the step it waits at. */
+    public record Submitted(UUID procedure, UUID document, UUID task) {}
 
     /**
      * A request submitted on the given step, waiting at the step after it, in the inbox of that
@@ -47,7 +48,7 @@ public class ProcedureSeed {
             RequestData.Requester requester,
             List<RequestData.Answer> answers) {
         forget(reference);
-        Submitted submitted = new Submitted(UUID.randomUUID(), UUID.randomUUID());
+        Submitted submitted = new Submitted(UUID.randomUUID(), UUID.randomUUID(), null);
         jdbc.sql("""
                         insert into engine.procedure (id, reference, draft, version, requester_id, current_step_id, status)
                         values (:id, :reference, :draft, :version, :requester, :step, 'in_progress')""")
@@ -76,8 +77,8 @@ public class ProcedureSeed {
                         "details",
                         json.writeValueAsString(Map.of("name", requester.name(), "jobTitle", requester.jobTitle())))
                 .update();
-        tasks.open(submitted.procedure(), nextStep);
-        return submitted;
+        UUID task = tasks.open(submitted.procedure(), nextStep);
+        return new Submitted(submitted.procedure(), submitted.document(), task);
     }
 
     /** A file attached to the submitted request, as UC15 (Dinis) will do. */
