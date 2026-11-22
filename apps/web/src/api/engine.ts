@@ -1,7 +1,10 @@
 import { send, unexpected } from './http'
 
-/** A task waiting for this person in the inbox (the least of UC27 that UC17 needs) */
-export type InboxItem = { task: string; reference: string; requester: string; step: string }
+/**
+ * A task waiting for this person in the inbox (the least of UC27 that UC17 needs). If a candidate
+ * took it, reviewer is who («Rui Matos, Chefe de Divisão») and mine whether it is this person.
+ */
+export type InboxItem = { task: string; reference: string; requester: string; step: string; reviewer: string | null; mine: boolean }
 
 export type RequestStep = { id: string; name: string; handledBy: string }
 
@@ -25,9 +28,13 @@ export type ReviewRequest = {
   answers: Answer[]
   files: RequestFile[]
   history: HistoryLine[]
-  /** The task this person may decide now, or null */
+  /** The task this person took and may decide now, or null */
   task: string | null
+  /** Who took the current task, as «Rui Matos, Chefe de Divisão», or null */
+  reviewer: string | null
 }
+
+export type Taken = { task: string; reference: string }
 
 /** Where the approved request went; no next step when it was the last */
 export type Approved = { task: string; reference: string; nextStep: string | null; handledBy: string | null; nextTask: string | null }
@@ -63,13 +70,19 @@ export async function openRequest(reference: string): Promise<Opened> {
 /** The address of a file of the request, to open in the browser */
 export const fileUrl = (reference: string, file: string) => `${PROCEDURES}/${encodeURIComponent(reference)}/files/${file}`
 
-async function decide<T>(task: string, decision: 'approve' | 'undo'): Promise<Outcome<T>> {
+async function decide<T>(task: string, decision: 'take' | 'release' | 'approve' | 'undo'): Promise<Outcome<T>> {
   const url = `/api/engine/tasks/${task}/${decision}`
   const response = await send('POST', url)
   if (response.status === 409) return { done: false, reason: ((await response.json()) as { detail: string }).detail }
   if (!response.ok) throw unexpected('POST', url, response)
   return { done: true, result: (await response.json()) as T }
 }
+
+/** «Rever»: takes the task, or gives who took it first */
+export const take = (task: string) => decide<Taken>(task, 'take')
+
+/** «Libertar a tarefa»: gives the task back to every candidate */
+export const release = (task: string) => decide<Taken>(task, 'release')
 
 export const approve = (task: string) => decide<Approved>(task, 'approve')
 

@@ -13,6 +13,8 @@ vi.mock('../api/engine', async (original) => ({
   listInbox: vi.fn(),
   openRequest: vi.fn(),
   approve: vi.fn(),
+  take: vi.fn(),
+  release: vi.fn(),
   undoApproval: vi.fn(),
 }))
 
@@ -45,6 +47,16 @@ const request: ReviewRequest = {
   files: [{ id: 'f1', filename: 'bilhete_comboio.pdf', version: 1 }],
   history: [{ at: '2026-11-18T16:02:00Z', text: 'Ana Ferreira, Técnica Superior, submeteu o pedido' }],
   task: 't1',
+  reviewer: 'Rui Matos, Chefe de Divisão',
+}
+
+const waiting: api.InboxItem = {
+  task: 't1',
+  reference: 'AC-2026-0147',
+  requester: 'Ana Ferreira',
+  step: 'Validação da chefia',
+  reviewer: null,
+  mine: false,
 }
 
 const approved: api.Approved = {
@@ -77,13 +89,57 @@ function openAt(pathname: string, state?: unknown) {
 afterEach(() => vi.resetAllMocks())
 
 describe('the inbox (until UC27)', () => {
-  it('lists the requests waiting for the person, each with «Rever»', async () => {
-    vi.mocked(api.listInbox).mockResolvedValue([{ task: 't1', reference: 'AC-2026-0147', requester: 'Ana Ferreira', step: 'Validação da chefia' }])
+  it('lists the requests waiting for the person; «Rever» takes the task and opens the request', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([waiting])
+    vi.mocked(api.take).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
     openAt('/caixa-de-tarefas')
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Tarefas à sua espera · 1' })).toBeInTheDocument()
     expect(screen.getByText('AC-2026-0147 · Validação da chefia')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /^Rever\s*o pedido AC-2026-0147 de Ana Ferreira$/ })).toHaveAttribute('href', '/pedidos/AC-2026-0147')
+    await userEvent.click(screen.getByRole('button', { name: /^Rever\s*o pedido AC-2026-0147 de Ana Ferreira$/ }))
+
+    expect(api.take).toHaveBeenCalledWith('t1')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ajudas de custo · Ana Ferreira' })).toBeInTheDocument()
+  })
+
+  it('when another candidate took the request first, «Rever» opens it to look only', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([waiting])
+    vi.mocked(api.take).mockResolvedValue({ done: false, reason: 'Em revisão por Segunda Chefia, Chefe de Divisão.' })
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, task: null, reviewer: 'Segunda Chefia, Chefe de Divisão' } })
+    openAt('/caixa-de-tarefas')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Rever/ }))
+
+    expect(await screen.findByText('Em revisão por Segunda Chefia, Chefe de Divisão.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument()
+  })
+
+  it('marks a request another candidate took, with «Ver» only', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([{ ...waiting, reviewer: 'Rui Matos, Chefe de Divisão' }])
+    openAt('/caixa-de-tarefas')
+
+    expect(await screen.findByText('Em revisão por Rui Matos, Chefe de Divisão')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^Ver\s*o pedido AC-2026-0147 de Ana Ferreira$/ })).toHaveAttribute('href', '/pedidos/AC-2026-0147')
+    expect(screen.queryByRole('button', { name: /^Rever/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps «Rever» on a request the person took themselves', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([{ ...waiting, reviewer: 'Rui Matos, Chefe de Divisão', mine: true }])
+    openAt('/caixa-de-tarefas')
+
+    expect(await screen.findByRole('button', { name: /^Rever/ })).toBeInTheDocument()
+    expect(screen.queryByText(/^Em revisão por/)).not.toBeInTheDocument()
+  })
+
+  it('says so when the task cannot be taken', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([waiting])
+    vi.mocked(api.take).mockRejectedValue(new Error('POST answered 500'))
+    openAt('/caixa-de-tarefas')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Rever/ }))
+
+    expect(await screen.findByText('Não foi possível abrir a tarefa')).toBeInTheDocument()
   })
 
   it('says when nothing is waiting', async () => {
@@ -241,12 +297,43 @@ describe('«Rever pedido» (UC17)', () => {
     expect(screen.getByRole('button', { name: 'Aprovar' })).toBeEnabled()
   })
 
-  it('shows no decision to someone who may not decide it now', async () => {
+  it('shows no decision to someone who may not decide it now, but who has it in review', async () => {
     vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, task: null } })
     openAt('/pedidos/AC-2026-0147')
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Estado' })).toBeInTheDocument()
+    expect(screen.getByText('Em revisão por Rui Matos, Chefe de Divisão.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aprovar' })).not.toBeInTheDocument()
+  })
+
+  it('shows where the request is to someone who looks while nobody has it in review', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, task: null, reviewer: null } })
+    openAt('/pedidos/AC-2026-0147')
+
+    expect(await screen.findByText('No passo «Validação da chefia», com Chefias da unidade do requerente.')).toBeInTheDocument()
+  })
+
+  it('«Libertar a tarefa» gives it back and goes to the inbox with «Tarefa libertada»', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    vi.mocked(api.release).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Libertar a tarefa' }))
+
+    expect(api.release).toHaveBeenCalledWith('t1')
+    expect(await screen.findByText('Tarefa libertada')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desfazer' })).not.toBeInTheDocument()
+  })
+
+  it('says so when the task cannot be released', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    vi.mocked(api.release).mockRejectedValue(new Error('POST answered 500'))
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Libertar a tarefa' }))
+
+    expect(await screen.findByText('Não foi possível libertar a tarefa')).toBeInTheDocument()
   })
 
   it.each([403, 404] as const)('does not tell someone who takes no part in it that the request exists (%i)', async (status) => {

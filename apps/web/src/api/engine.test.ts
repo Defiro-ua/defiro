@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approve, fileUrl, listInbox, openRequest, undoApproval } from './engine'
+import { approve, fileUrl, listInbox, openRequest, release, take, undoApproval } from './engine'
 
 function answer(status: number, body?: unknown) {
   const fetch = vi.fn().mockResolvedValue(new Response(body === undefined ? null : JSON.stringify(body), { status }))
@@ -74,6 +74,21 @@ describe('the Engine API', () => {
       done: false,
       reason: 'Já não é possível desfazer: o pedido já foi tratado no passo «Verificação financeira».',
     })
+  })
+
+  it('takes a task, or gives who took it first', async () => {
+    const fetch = answer(200, { task: 't1', reference: 'AC-2026-0147' })
+    await expect(take('t1')).resolves.toEqual({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    expect(fetch.mock.calls[0]).toEqual(['/api/engine/tasks/t1/take', expect.objectContaining({ method: 'POST' })])
+
+    answer(409, { detail: 'Em revisão por Segunda Chefia, Chefe de Divisão.' })
+    await expect(take('t1')).resolves.toEqual({ done: false, reason: 'Em revisão por Segunda Chefia, Chefe de Divisão.' })
+  })
+
+  it('releases a task', async () => {
+    const fetch = answer(200, { task: 't1', reference: 'AC-2026-0147' })
+    await expect(release('t1')).resolves.toMatchObject({ done: true })
+    expect(fetch.mock.calls[0][0]).toBe('/api/engine/tasks/t1/release')
   })
 
   it('fails when the server refuses the decision for another reason', async () => {

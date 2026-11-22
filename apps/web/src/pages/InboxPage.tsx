@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { listInbox, undoApproval, type InboxItem } from '../api/engine'
+import { listInbox, take, undoApproval, type InboxItem } from '../api/engine'
 import { Button } from '../components/Button'
+import { Chip } from '../components/Chip'
 import { Flash, type Notice } from '../components/Flash'
 import { Icon } from '../components/Icon'
 import { AppShell } from '../components/layout/AppShell'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
-import { refusedNotice, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
+import { refusedNotice, takeFailed, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 
@@ -57,6 +58,18 @@ export function InboxPage() {
       setUndo(undefined)
       setNotice(refusedNotice(outcome.reason))
     }
+  }
+
+  // «Rever» takes the task and opens the request. If another candidate took it first, the request
+  // opens to look only, and says who has it.
+  async function review(item: InboxItem) {
+    try {
+      await take(item.task)
+    } catch {
+      setNotice(takeFailed)
+      return
+    }
+    navigate(paths.request(item.reference))
   }
 
   const n = Array.isArray(items) ? items.length : 0
@@ -116,13 +129,28 @@ export function InboxPage() {
                       {item.reference} · {item.step}
                     </span>
                   </div>
-                  <Button to={paths.request(item.reference)} variant={i === 0 ? 'primary' : 'secondary'} size="s" iconRight="arrowRight" iconSize={18}>
-                    Rever
-                    <span className="sr-only">
-                      {' '}
-                      o pedido {item.reference} de {item.requester}
-                    </span>
-                  </Button>
+                  {item.reviewer && !item.mine ? (
+                    <>
+                      <Chip tone="info" icon="user">
+                        Em revisão por {item.reviewer}
+                      </Chip>
+                      <Button to={paths.request(item.reference)} variant="secondary" size="s" icon="eye" iconSize={18}>
+                        Ver
+                        <span className="sr-only">
+                          {' '}
+                          o pedido {item.reference} de {item.requester}
+                        </span>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant={i === 0 ? 'primary' : 'secondary'} size="s" iconRight="arrowRight" iconSize={18} onClick={() => review(item)}>
+                      Rever
+                      <span className="sr-only">
+                        {' '}
+                        o pedido {item.reference} de {item.requester}
+                      </span>
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { approve, fileUrl, openRequest, type Opened, type ReviewRequest } from '../api/engine'
+import { approve, fileUrl, openRequest, release, type Opened, type ReviewRequest } from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { Flash, type Notice } from '../components/Flash'
@@ -10,7 +10,7 @@ import { ProcedureProgress } from '../components/ProcedureProgress'
 import { cx } from '../lib/cx'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
-import { approvedNotice, approveFailed, dateTime, refusedNotice, type ReviewState } from '../review/notices'
+import { approvedNotice, approveFailed, dateTime, refusedNotice, releasedNotice, releaseFailed, type ReviewState } from '../review/notices'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 
@@ -74,6 +74,19 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
   const current = r.path.findIndex((s) => s.id === r.currentStep)
   const next = current >= 0 ? r.path[current + 1] : undefined
   const closed = r.status === 'closed'
+
+  // «Libertar a tarefa»: back to every candidate, and to the inbox
+  async function releaseIt(task: string) {
+    setApproving(true)
+    try {
+      await release(task)
+      const state: ReviewState = { notice: releasedNotice }
+      navigate(paths.inbox, { state })
+    } catch {
+      setApproving(false)
+      onRefused(releaseFailed)
+    }
+  }
 
   async function approveIt(task: string) {
     setApproving(true)
@@ -239,19 +252,27 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
               <p className="-mt-1.5 mb-0 text-center text-label-sm leading-[19px] text-ink-2">
                 {next ? `Segue para o passo «${next.name}», com ${next.handledBy}.` : 'Fecha o procedimento.'}
               </p>
+              <Button variant="secondary" icon="reset" className="w-full" disabled={approving} onClick={() => releaseIt(r.task as string)}>
+                Libertar a tarefa
+              </Button>
             </section>
           ) : (
             <section aria-labelledby="titulo-estado" className="edge flex flex-col gap-3 rounded-md bg-soft p-6">
               <h2 id="titulo-estado" className="m-0 text-title-lg font-semibold">
                 Estado
               </h2>
-              <p className="m-0 text-[15px] leading-[23px]">
-                {closed ? 'Concluído.' : current >= 0 ? `No passo «${r.path[current].name}», com ${r.path[current].handledBy}.` : '—'}
-              </p>
+              <p className="m-0 text-[15px] leading-[23px]">{stateText(r, current)}</p>
             </section>
           )}
         </div>
       </div>
     </>
   )
+}
+
+// For whoever looks without deciding: who has the request in review, or where it is
+function stateText(r: ReviewRequest, current: number) {
+  if (r.status === 'closed') return 'Concluído.'
+  if (r.reviewer) return `Em revisão por ${r.reviewer}.`
+  return current >= 0 ? `No passo «${r.path[current].name}», com ${r.path[current].handledBy}.` : '—'
 }

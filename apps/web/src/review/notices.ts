@@ -21,6 +21,10 @@ export const refusedNotice = (reason: string): Notice => ({ tom: 'warn', titulo:
 // When the server cannot be reached; worded as the sign-out failure (AppShell).
 export const undoFailed: Notice = { tom: 'bad', titulo: 'Não foi possível desfazer', texto: 'Tente outra vez daqui a pouco.' }
 export const approveFailed: Notice = { tom: 'bad', titulo: 'Não foi possível aprovar', texto: 'Tente outra vez daqui a pouco.' }
+export const takeFailed: Notice = { tom: 'bad', titulo: 'Não foi possível abrir a tarefa', texto: 'Tente outra vez daqui a pouco.' }
+export const releaseFailed: Notice = { tom: 'bad', titulo: 'Não foi possível libertar a tarefa', texto: 'Tente outra vez daqui a pouco.' }
+
+export const releasedNotice: Notice = { tom: 'ok', titulo: 'Tarefa libertada' }
 
 /** «22/11/2026 18:32», in the organization's time, as the prototype shows dates (fmtDateTime) */
 export function dateTime(iso: string) {
