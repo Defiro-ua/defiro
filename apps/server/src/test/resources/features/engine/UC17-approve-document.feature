@@ -38,18 +38,20 @@ Feature: Approve a document
       | Verificação financeira | Divisão Financeira               |
       | Validação final        | RH · Formação                    |
     # The mockup gives its dates relative to the day it is opened (Partida 14 days before, at 07:30;
-    #   Regresso 12 days before, at 19:40; corrected to 13 days before, at 19:10). They are fixed
-    #   here from 22/11/2026, the day this draft was written, in the prototype's format.
+    #   Regresso 12 days before, at 19:40; corrected to 13 days before, at 19:10; the certificate's
+    #   dates 14 and 13 days before). They are fixed here from 22/11/2026, the day this draft was
+    #   written, in the prototype's format.
     And Ana Ferreira submitted the request "AC-2026-0147" for "Ajudas de custo" with
-      | field      | answer                          |
-      | Motivo     | Formação                        |
-      | Destino    | Lisboa                          |
-      | Descrição  | Formação em Contratação Pública |
-      | Partida    | 08/11/2026 07:30                |
-      | Regresso   | 10/11/2026 19:40                |
-      | Transporte | Transportes públicos            |
-      | NIF        | 234 567 418                     |
-      | IBAN       | PT50 0035 0000 1234 5678 9015 4 |
+      | field                | answer                          |
+      | Motivo               | Formação                        |
+      | Destino              | Lisboa                          |
+      | Descrição            | Formação em Contratação Pública |
+      | Partida              | 08/11/2026 07:30                |
+      | Regresso             | 10/11/2026 19:40                |
+      | Datas do certificado | 08/11/2026 a 09/11/2026         |
+      | Transporte           | Transportes públicos            |
+      | NIF                  | 234 567 418                     |
+      | IBAN                 | PT50 0035 0000 1234 5678 9015 4 |
     And with the files "bilhete_comboio.pdf" and "fatura_hotel.pdf"
 
   Rule: A request opens from the inbox in one click, and shows the data, the files, the path with the current step and the history
@@ -249,7 +251,7 @@ Feature: Approve a document
   Rule: Journey: Rui returns with a note, Ana corrects, Rui approves
 
     Scenario: A returned request comes back corrected and is approved
-      Given Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente", with the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Certificado de presença"
+      Given Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente", with the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Datas do certificado"
       And Ana Ferreira corrected "Regresso" to "09/11/2026 19:10" and attached "certificado_presenca.pdf", resubmitting it as version 2
       When Rui Matos approves the request "AC-2026-0147" from his inbox, after seeing what changed
       Then he is back on his inbox with the notice «Pedido aprovado»
