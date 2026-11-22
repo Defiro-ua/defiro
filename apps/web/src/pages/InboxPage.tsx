@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { listInbox, undoApproval, type InboxItem } from '../api/engine'
 import { Button } from '../components/Button'
 import { Flash, type Notice } from '../components/Flash'
@@ -8,6 +8,7 @@ import { AppShell } from '../components/layout/AppShell'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
 import { refusedNotice, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
+import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 
 /**
@@ -17,11 +18,10 @@ import { paths } from '../routes'
  */
 export function InboxPage() {
   const profile = useProfile()
-  const location = useLocation()
   const navigate = useNavigate()
   const headingRef = useRef<HTMLHeadingElement>(null)
   useFocusOnArrival(headingRef)
-  const arrived = (location.state as ReviewState | null) ?? {}
+  const arrived = useArrival()
   const [notice, setNotice] = useState<Notice | null>(arrived.notice ?? null)
   const [undo, setUndo] = useState(arrived.undo)
   const [items, setItems] = useState<InboxItem[] | null | 'failed'>(null)

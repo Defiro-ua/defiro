@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router'
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/engine'
 import type { ReviewRequest } from '../api/engine'
@@ -55,6 +55,11 @@ const approved: api.Approved = {
   nextTask: 't2',
 }
 
+// What a reload or coming back would find in the history
+function HistoryState() {
+  return <p data-testid="history-state">{JSON.stringify(useLocation().state)}</p>
+}
+
 function openAt(pathname: string, state?: unknown) {
   render(
     <MemoryRouter initialEntries={[{ pathname, state }]}>
@@ -64,6 +69,7 @@ function openAt(pathname: string, state?: unknown) {
           <Route path="/pedidos/:reference" element={<RequestPage />} />
         </Route>
       </Routes>
+      <HistoryState />
     </MemoryRouter>,
   )
 }
@@ -105,6 +111,14 @@ describe('the inbox (until UC27)', () => {
     expect(api.undoApproval).toHaveBeenCalledWith('t1')
     expect(await screen.findByRole('heading', { level: 1, name: 'Ajudas de custo · Ana Ferreira' })).toBeInTheDocument()
     expect(await screen.findByText('Aprovação desfeita')).toBeInTheDocument()
+  })
+
+  it('takes the notice and «Desfazer» out of the history, so a reload or coming back does not offer them again', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
+
+    expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeInTheDocument()
+    expect(screen.getByTestId('history-state')).toHaveTextContent('null')
   })
 
   it('when it is too late to undo, says why and offers «Desfazer» no more', async () => {

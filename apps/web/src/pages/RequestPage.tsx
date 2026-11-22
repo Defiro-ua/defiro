@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { approve, fileUrl, openRequest, type Opened, type ReviewRequest } from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
@@ -11,6 +11,7 @@ import { cx } from '../lib/cx'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
 import { approvedNotice, approveFailed, dateTime, refusedNotice, type ReviewState } from '../review/notices'
+import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 
 const card = 'rounded-md border border-line bg-panel'
@@ -25,9 +26,8 @@ const secondarySmall =
 export function RequestPage() {
   const { reference = '' } = useParams()
   const profile = useProfile()
-  const location = useLocation()
   const [opened, setOpened] = useState<Opened | null | 'failed'>(null)
-  const [notice, setNotice] = useState<Notice | null>((location.state as ReviewState | null)?.notice ?? null)
+  const [notice, setNotice] = useState<Notice | null>(useArrival().notice ?? null)
 
   useEffect(() => {
     let current = true
