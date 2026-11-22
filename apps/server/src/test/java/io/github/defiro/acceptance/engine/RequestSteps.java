@@ -97,7 +97,7 @@ public class RequestSteps {
                 deployed.draft(),
                 deployed.version(),
                 steps.get(0).id(),
-                steps.get(1).id(),
+                steps.get(1),
                 new Requester(account.id(), account.name(), account.jobTitle(), account.unit(), account.manager()),
                 answers.asMaps().stream()
                         .map(row -> new Answer(field(row.get("field")), row.get("field"), row.get("answer")))

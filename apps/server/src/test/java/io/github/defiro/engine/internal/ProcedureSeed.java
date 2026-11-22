@@ -1,5 +1,6 @@
 package io.github.defiro.engine.internal;
 
+import io.github.defiro.spec.StepSpecification;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,11 +24,13 @@ public class ProcedureSeed {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final Files files;
+    private final Tasks tasks;
 
-    ProcedureSeed(JdbcClient jdbc, JsonMapper json, Files files) {
+    ProcedureSeed(JdbcClient jdbc, JsonMapper json, Files files, Tasks tasks) {
         this.jdbc = jdbc;
         this.json = json;
         this.files = files;
+        this.tasks = tasks;
     }
 
     /** The person who made the request, as Entra ID knew them at the time. */
@@ -38,8 +41,8 @@ public class ProcedureSeed {
     public record Submitted(UUID procedure, UUID document) {}
 
     /**
-     * A request submitted on the given step, waiting at the step after it. A request with the same
-     * reference from an earlier scenario is removed first.
+     * A request submitted on the given step, waiting at the step after it, in the inbox of that
+     * step's candidates. A request with the same reference from an earlier scenario is removed first.
      */
     @Transactional
     public Submitted submit(
@@ -47,7 +50,7 @@ public class ProcedureSeed {
             UUID draft,
             int version,
             String requestStep,
-            String nextStep,
+            StepSpecification nextStep,
             Requester requester,
             List<Answer> answers) {
         forget(reference);
@@ -60,7 +63,7 @@ public class ProcedureSeed {
                 .param("draft", draft)
                 .param("version", version)
                 .param("requester", requester.id())
-                .param("step", nextStep)
+                .param("step", nextStep.id())
                 .update();
         jdbc.sql("""
                         insert into engine.document (id, procedure_id, step_id, data, status)
@@ -80,6 +83,7 @@ public class ProcedureSeed {
                         "details",
                         json.writeValueAsString(Map.of("name", requester.name(), "jobTitle", requester.jobTitle())))
                 .update();
+        tasks.open(submitted.procedure(), nextStep);
         return submitted;
     }
 
