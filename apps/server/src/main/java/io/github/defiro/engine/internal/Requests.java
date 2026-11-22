@@ -5,10 +5,14 @@ import io.github.defiro.engine.internal.Procedures.Procedure;
 import io.github.defiro.identity.Person;
 import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.WorkflowSpecification;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * A request as the people who take part in it see it: its data, its files, its path and its
@@ -24,6 +28,7 @@ class Requests {
     private final Candidates candidates;
     private final Files files;
     private final AuditLog auditLog;
+    private final JsonMapper json;
 
     Requests(
             Procedures procedures,
@@ -31,18 +36,27 @@ class Requests {
             Tasks tasks,
             Candidates candidates,
             Files files,
-            AuditLog auditLog) {
+            AuditLog auditLog,
+            JsonMapper json) {
         this.procedures = procedures;
         this.versions = versions;
         this.tasks = tasks;
         this.candidates = candidates;
         this.files = files;
         this.auditLog = auditLog;
+        this.json = json;
     }
 
     record Step(String id, String name, String handledBy) {}
 
-    record File(UUID id, String filename) {}
+    /**
+     * An answer of the current version. On a resubmitted request, a changed answer is marked, with
+     * the answer of the version before.
+     */
+    record Answer(String field, String label, String value, boolean changed, String previous) {}
+
+    /** A file, with the version of the request it was attached in. */
+    record File(UUID id, String filename, int version) {}
 
     record Request(
             String reference,
@@ -50,8 +64,9 @@ class Requests {
             String status,
             String currentStep,
             List<Step> path,
+            int version,
             RequestData.Requester requester,
-            List<RequestData.Answer> answers,
+            List<Answer> answers,
             List<File> files,
             List<History.Line> history) {}
 
@@ -62,6 +77,10 @@ class Requests {
             WorkflowSpecification specification = specification(procedure);
             List<AuditLog.Entry> entries = auditLog.of(procedure.id());
             mustTakePart(procedure, request, specification, entries, person);
+            List<Resubmission> resubmissions = entries.stream()
+                    .filter(entry -> Resubmission.ACTION.equals(entry.action()))
+                    .map(entry -> json.convertValue(entry.details(), Resubmission.class))
+                    .toList();
             return new Request(
                     procedure.reference(),
                     specification.name(),
@@ -70,11 +89,10 @@ class Requests {
                     specification.steps().stream()
                             .map(step -> new Step(step.id(), step.name(), step.handledBy()))
                             .toList(),
+                    resubmissions.isEmpty() ? 1 : resubmissions.getLast().version(),
                     request.requester(),
-                    request.answers(),
-                    files.of(procedure.id()).stream()
-                            .map(file -> new File(file.id(), file.filename()))
-                            .toList(),
+                    answers(request, resubmissions),
+                    files(procedure, resubmissions),
                     entries.stream().map(History::of).toList());
         });
     }
@@ -90,6 +108,35 @@ class Requests {
                     person);
             return files.find(id).filter(file -> file.procedure().equals(procedure.id()));
         });
+    }
+
+    // Compared with the version before the current one, if the request was resubmitted.
+    private static List<Answer> answers(RequestData request, List<Resubmission> resubmissions) {
+        Map<String, String> before = resubmissions.isEmpty()
+                ? null
+                : resubmissions.getLast().previousAnswers().stream()
+                        .collect(HashMap::new, (map, answer) -> map.put(answer.field(), answer.value()), Map::putAll);
+        return request.answers().stream()
+                .map(answer -> {
+                    boolean changed = before != null && !Objects.equals(before.get(answer.field()), answer.value());
+                    return new Answer(
+                            answer.field(),
+                            answer.label(),
+                            answer.value(),
+                            changed,
+                            changed ? before.get(answer.field()) : null);
+                })
+                .toList();
+    }
+
+    // A file is of version 1, unless a resubmission added it.
+    private List<File> files(Procedure procedure, List<Resubmission> resubmissions) {
+        Map<UUID, Integer> addedIn = new HashMap<>();
+        resubmissions.forEach(
+                resubmission -> resubmission.newFiles().forEach(file -> addedIn.put(file, resubmission.version())));
+        return files.of(procedure.id()).stream()
+                .map(file -> new File(file.id(), file.filename(), addedIn.getOrDefault(file.id(), 1)))
+                .toList();
     }
 
     byte[] content(StoredFile file) {

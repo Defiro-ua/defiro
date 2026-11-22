@@ -192,6 +192,36 @@ public class ReviewSteps {
                 .isEqualTo(current);
     }
 
+    @Then("{string} is marked as changed, with the answer of version {int}, {string}, before it")
+    public void isMarkedAsChanged(String field, int version, String previous) {
+        JsonPath request = request();
+        assertThat(request.getInt("version")).isEqualTo(version + 1);
+        assertThat(request.getBoolean(answer(field) + ".changed"))
+                .as(field + " is changed")
+                .isTrue();
+        assertThat(request.getString(answer(field) + ".previous")).isEqualTo(previous);
+    }
+
+    @Then("{string} is not marked as changed")
+    public void isNotMarkedAsChanged(String field) {
+        assertThat(request().getBoolean(answer(field) + ".changed"))
+                .as(field + " is changed")
+                .isFalse();
+    }
+
+    @Then("the file {string} is marked as new in version {int}")
+    public void theFileIsMarkedAsNewIn(String filename, int version) {
+        JsonPath request = request();
+        assertThat(request.getInt("version")).isEqualTo(version);
+        assertThat(request.getInt(file(filename) + ".version")).isEqualTo(version);
+    }
+
+    @Then("the file {string} is not")
+    public void theFileIsNot(String filename) {
+        JsonPath request = request();
+        assertThat(request.getInt(file(filename) + ".version")).isLessThan(request.getInt("version"));
+    }
+
     @Then("its history shows {string}")
     public void itsHistoryShows(String entry) {
         assertThat(request().getList("history.text", String.class)).contains(entry);
@@ -250,6 +280,14 @@ public class ReviewSteps {
         Response inbox = people.of(person).request().get(INBOX);
         assertThat(inbox.statusCode()).isEqualTo(200);
         return inbox.jsonPath().getList("reference", String.class);
+    }
+
+    private static String answer(String label) {
+        return "answers.find { it.label == '%s' }".formatted(label);
+    }
+
+    private static String file(String filename) {
+        return "files.find { it.filename == '%s' }".formatted(filename);
     }
 
     private JsonPath request() {

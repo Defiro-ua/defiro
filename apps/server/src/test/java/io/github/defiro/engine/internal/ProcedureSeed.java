@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -23,12 +24,17 @@ public class ProcedureSeed {
     private final JsonMapper json;
     private final Files files;
     private final Tasks tasks;
+    private final Procedures procedures;
+    private final AuditLog auditLog;
 
-    ProcedureSeed(JdbcClient jdbc, JsonMapper json, Files files, Tasks tasks) {
+    ProcedureSeed(
+            JdbcClient jdbc, JsonMapper json, Files files, Tasks tasks, Procedures procedures, AuditLog auditLog) {
         this.jdbc = jdbc;
         this.json = json;
         this.files = files;
         this.tasks = tasks;
+        this.procedures = procedures;
+        this.auditLog = auditLog;
     }
 
     /** The submitted request, and the task of the step it waits at. */
@@ -86,6 +92,54 @@ public class ProcedureSeed {
         return files.store(request.procedure(), request.document(), filename, content)
                 .id();
     }
+
+    /**
+     * Stands in for UC20 (Dinis): the requester corrects the request and resubmits it. The answers
+     * it replaces and the files it adds go in the audit log, as {@link Resubmission} says; the
+     * request goes back to its first review step (UC20 #6), with a new task.
+     *
+     * @return the request, with the task of the step it now waits at, the version it became and the
+     *     ids of the files it added
+     */
+    @Transactional
+    public Resubmitted resubmit(
+            Submitted request,
+            RequestData.Requester requester,
+            List<RequestData.Answer> answers,
+            Map<String, byte[]> newFiles,
+            StepSpecification firstReview) {
+        RequestData before = procedures.request(request.procedure());
+        // Version 1 is the submitted request; each resubmission makes the next.
+        int version = 2
+                + jdbc.sql("""
+                                select count(*) from engine.audit_log
+                                where procedure_id = :procedure and action = :action""")
+                        .param("procedure", request.procedure())
+                        .param("action", Resubmission.ACTION)
+                        .query(Integer.class)
+                        .single();
+        jdbc.sql("""
+                        update engine.document set data = cast(:data as jsonb), updated_at = now()
+                        where id = :id""")
+                .param("data", json.writeValueAsString(new RequestData(before.requester(), answers)))
+                .param("id", request.document())
+                .update();
+        List<UUID> added = newFiles.entrySet().stream()
+                .map(file -> attach(request, file.getKey(), file.getValue()))
+                .toList();
+        tasks.openOf(request.procedure()).forEach(open -> tasks.withdraw(open.id()));
+        procedures.moveTo(request.procedure(), firstReview.id());
+        UUID task = tasks.open(request.procedure(), firstReview);
+        Map<String, Object> details = json.convertValue(
+                new Resubmission(version, before.answers(), added), new TypeReference<Map<String, Object>>() {});
+        details.put("name", requester.name());
+        details.put("jobTitle", requester.jobTitle());
+        auditLog.append(
+                requester.id(), request.procedure(), Resubmission.ACTION, "document", request.document(), details);
+        return new Resubmitted(new Submitted(request.procedure(), request.document(), task), version, added);
+    }
+
+    public record Resubmitted(Submitted request, int version, List<UUID> newFiles) {}
 
     private void forget(String reference) {
         jdbc.sql("""

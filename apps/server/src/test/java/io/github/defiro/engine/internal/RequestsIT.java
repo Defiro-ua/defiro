@@ -65,7 +65,8 @@ class RequestsIT {
     void theRequesterOpensTheirRequest() {
         assertThat(requests.open(reference, person("ana", "Divisão de Obras Municipais")))
                 .hasValueSatisfying(opened -> assertThat(opened.answers())
-                        .containsExactly(new RequestData.Answer("destino", "Destino", "Lisboa")));
+                        // Never resubmitted, so nothing is marked as changed.
+                        .containsExactly(new Requests.Answer("destino", "Destino", "Lisboa", false, null)));
     }
 
     @Test

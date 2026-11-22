@@ -57,6 +57,8 @@ public class RequestSteps {
     private Submitted request;
     private String requester;
     private String waitingAt;
+    private List<Answer> answers;
+    private StepSpecification firstReview;
 
     @Autowired
     Deployment deployment;
@@ -95,18 +97,41 @@ public class RequestSteps {
         assertThat(deployed).as("the workflow " + workflow).isNotNull();
         List<StepSpecification> steps = deployed.specification().steps();
         Account account = entraId.account(person);
+        this.answers = answers.asMaps().stream()
+                .map(row -> new Answer(field(row.get("field")), row.get("field"), row.get("answer")))
+                .toList();
+        firstReview = steps.get(1);
         request = seed.submit(
                 reference,
                 deployed.draft(),
                 deployed.version(),
                 steps.get(0).id(),
-                steps.get(1),
-                new Requester(account.id(), account.name(), account.jobTitle(), account.unit(), account.manager()),
-                answers.asMaps().stream()
-                        .map(row -> new Answer(field(row.get("field")), row.get("field"), row.get("answer")))
-                        .toList());
+                firstReview,
+                requesterOf(account),
+                this.answers);
         requester = person;
-        waitingAt = steps.get(1).name();
+        waitingAt = firstReview.name();
+    }
+
+    @Given(
+            "{person} corrected {string} to {string} and attached {string}, resubmitting the request {string} as version {int}")
+    public void correctedAndResubmitted(
+            String person, String field, String answer, String filename, String reference, int version) {
+        assertThat(request).as("a submitted request").isNotNull();
+        assertThat(answers.stream().map(Answer::label))
+                .as("the answers of the request")
+                .contains(field);
+        answers = answers.stream()
+                .map(old -> old.label().equals(field) ? new Answer(old.field(), old.label(), answer) : old)
+                .toList();
+        byte[] content = contentOf(filename);
+        ProcedureSeed.Resubmitted resubmitted = seed.resubmit(
+                request, requesterOf(entraId.account(person)), answers, Map.of(filename, content), firstReview);
+        assertThat(resubmitted.version()).isEqualTo(version);
+        request = resubmitted.request();
+        waitingAt = firstReview.name();
+        fileIds.put(filename, resubmitted.newFiles().getFirst());
+        attached.put(filename, content);
     }
 
     @Given("with the files {string} and {string}")
@@ -144,10 +169,18 @@ public class RequestSteps {
 
     private void attach(String filename) {
         assertThat(request).as("a submitted request").isNotNull();
-        // Stands for the file's bytes: the tests only check they come back the same.
-        byte[] content = ("Conteúdo de " + filename).getBytes(StandardCharsets.UTF_8);
+        byte[] content = contentOf(filename);
         fileIds.put(filename, seed.attach(request, filename, content));
         attached.put(filename, content);
+    }
+
+    // Stands for the file's bytes: the tests only check they come back the same.
+    private static byte[] contentOf(String filename) {
+        return ("Conteúdo de " + filename).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static Requester requesterOf(Account account) {
+        return new Requester(account.id(), account.name(), account.jobTitle(), account.unit(), account.manager());
     }
 
     // A path the Designer accepts: it starts with the request and ends with the final validation.
