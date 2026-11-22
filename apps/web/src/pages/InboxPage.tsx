@@ -24,6 +24,7 @@ export function InboxPage() {
   const arrived = useArrival()
   const [notice, setNotice] = useState<Notice | null>(arrived.notice ?? null)
   const [undo, setUndo] = useState(arrived.undo)
+  const undoing = useRef(false)
   const [items, setItems] = useState<InboxItem[] | null | 'failed'>(null)
 
   useEffect(() => {
@@ -38,11 +39,14 @@ export function InboxPage() {
   }, [])
 
   async function undoIt() {
-    if (!undo) return
+    // A second click while the first is on its way undoes nothing more
+    if (!undo || undoing.current) return
+    undoing.current = true
     let outcome
     try {
       outcome = await undoApproval(undo.task)
     } catch {
+      undoing.current = false
       setNotice(undoFailed)
       return
     }

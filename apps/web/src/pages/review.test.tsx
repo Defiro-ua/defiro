@@ -121,6 +121,18 @@ describe('the inbox (until UC27)', () => {
     expect(screen.getByTestId('history-state')).toHaveTextContent('null')
   })
 
+  it('undoes once, however many times «Desfazer» is clicked', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.undoApproval).mockReturnValue(new Promise(() => {}))
+    openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
+
+    const undo = await screen.findByRole('button', { name: 'Desfazer' })
+    await userEvent.click(undo)
+    await userEvent.click(undo)
+
+    expect(api.undoApproval).toHaveBeenCalledOnce()
+  })
+
   it('when it is too late to undo, says why and offers «Desfazer» no more', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
     const reason = 'Já não é possível desfazer: o pedido já foi tratado no passo «Verificação financeira».'
