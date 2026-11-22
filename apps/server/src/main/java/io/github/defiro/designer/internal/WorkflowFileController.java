@@ -122,7 +122,8 @@ class WorkflowFileController {
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+                .replaceAll("^-", "")
+                .replaceAll("-$", "");
         return plain.isEmpty() ? "workflow" : plain;
     }
 
