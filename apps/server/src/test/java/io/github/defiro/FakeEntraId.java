@@ -41,6 +41,10 @@ public final class FakeEntraId {
     public static final String CLIENT_SECRET = "fake-entra-id-test-secret";
     public static final String REGISTRATION_ID = "entra";
 
+    // The Entra ID groups a step can be handled by, as the Designer lists them
+    // (apps/web/src/designer/groups.ts); the others there are units, or a rule.
+    private static final List<String> GROUPS = List.of("Todos os trabalhadores", "Chefias", "RH · Formação");
+
     private static final FakeEntraId INSTANCE = new FakeEntraId();
 
     private final RSAKey key = TestTokens.newKey();
@@ -97,6 +101,12 @@ public final class FakeEntraId {
         registry.add(prefix + "registration." + REGISTRATION_ID + ".client-secret", () -> CLIENT_SECRET);
         registry.add(prefix + "registration." + REGISTRATION_ID + ".scope", () -> "openid,profile");
         registry.add(prefix + "provider." + REGISTRATION_ID + ".issuer-uri", INSTANCE::issuer);
+        // Until UC05 keeps the group's id in the specification, defiro finds it from the name.
+        for (int k = 0; k < GROUPS.size(); k++) {
+            String name = GROUPS.get(k);
+            registry.add("defiro.identity.groups[" + k + "].name", () -> name);
+            registry.add("defiro.identity.groups[" + k + "].id", () -> groupId(name));
+        }
     }
 
     public String issuer() {
