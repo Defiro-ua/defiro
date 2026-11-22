@@ -30,6 +30,7 @@ class Requests {
     private final AuditLog auditLog;
     private final JsonMapper json;
     private final Decisions decisions;
+    private final Notes notes;
 
     Requests(
             Procedures procedures,
@@ -39,7 +40,8 @@ class Requests {
             Files files,
             AuditLog auditLog,
             JsonMapper json,
-            Decisions decisions) {
+            Decisions decisions,
+            Notes notes) {
         this.procedures = procedures;
         this.versions = versions;
         this.tasks = tasks;
@@ -48,6 +50,7 @@ class Requests {
         this.auditLog = auditLog;
         this.json = json;
         this.decisions = decisions;
+        this.notes = notes;
     }
 
     record Step(String id, String name, String handledBy) {}
@@ -77,7 +80,9 @@ class Requests {
             List<File> files,
             List<History.Line> history,
             UUID task,
-            String reviewer) {}
+            String reviewer,
+            List<Notes.Note> notes,
+            List<Notes.NoteFrom> notesFrom) {}
 
     /** The request, or empty if there is none with this reference. */
     Optional<Request> open(String reference, Person person) {
@@ -114,8 +119,21 @@ class Requests {
                     files(procedure, resubmissions),
                     entries.stream().map(History::of).toList(),
                     task,
-                    reviewer);
+                    reviewer,
+                    // Their own notes, while they have the task; nobody else sees them (UC19)
+                    task == null ? List.of() : notes.draftOf(task),
+                    candidateOf.map(open -> notesFrom(entries, open.id())).orElse(List.of()));
         });
+    }
+
+    // The notes sent with the approval that opened this task: the candidates of its step see them
+    private List<Notes.NoteFrom> notesFrom(List<AuditLog.Entry> entries, UUID task) {
+        return entries.stream()
+                .filter(entry -> Decisions.APPROVED.equals(entry.action()))
+                .filter(entry -> task.toString().equals(entry.details().get(Decisions.NEXT_TASK)))
+                .reduce((first, second) -> second)
+                .map(approval -> notes.sentWith(UUID.fromString(approval.entity())))
+                .orElse(List.of());
     }
 
     /** A file of the request, or empty if the request has no such file. */

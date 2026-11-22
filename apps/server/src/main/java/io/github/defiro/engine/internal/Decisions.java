@@ -26,25 +26,29 @@ class Decisions {
     static final String UNDONE = "undone";
     static final String TAKEN = "taken";
     static final String RELEASED = "released";
-    private static final String NEXT_TASK = "nextTask";
+    static final String NEXT_TASK = "nextTask";
+    static final String NOTES = "notes";
 
     private final Tasks tasks;
     private final Procedures procedures;
     private final SpecificationVersions versions;
     private final Candidates candidates;
     private final AuditLog auditLog;
+    private final Notes notes;
 
     Decisions(
             Tasks tasks,
             Procedures procedures,
             SpecificationVersions versions,
             Candidates candidates,
-            AuditLog auditLog) {
+            AuditLog auditLog,
+            Notes notes) {
         this.tasks = tasks;
         this.procedures = procedures;
         this.versions = versions;
         this.candidates = candidates;
         this.auditLog = auditLog;
+        this.notes = notes;
     }
 
     /**
@@ -87,6 +91,8 @@ class Decisions {
             if (!tasks.release(task.id(), person.id())) {
                 throw new NotAllowedException();
             }
+            // Notes never sent are discarded: whoever takes it next starts afresh (UC19)
+            notes.discard(task.id());
             Procedure procedure = procedures.find(task.procedure()).orElseThrow();
             Map<String, Object> details = who(person);
             details.put("step", step(procedure, task.step()).name());
@@ -133,6 +139,8 @@ class Decisions {
         Map<String, Object> details = who(person);
         details.put("step", step.name());
         details.put(NEXT_TASK, nextTask == null ? null : nextTask.toString());
+        // The reviewer's notes go on with the approval, to the next reviewer (UC19)
+        details.put(NOTES, notes.send(task.id()));
         auditLog.append(person.id(), procedure.id(), APPROVED, "task", task.id(), details);
         if (next == null) {
             return new Approved(task.id(), procedure.reference(), null, null, null);
@@ -180,6 +188,8 @@ class Decisions {
             }
         }
         tasks.reopen(task.id());
+        // The notes are the reviewer's draft again, to change before deciding again (UC19)
+        notes.backToDraft(task.id());
         procedures.moveTo(procedure.id(), step.id());
         Map<String, Object> details = who(person);
         details.put("step", step.name());

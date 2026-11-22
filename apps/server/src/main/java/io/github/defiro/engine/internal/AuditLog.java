@@ -30,7 +30,7 @@ class AuditLog {
     }
 
     /** One entry. The details keep the person's name and job title at the time, and what the action needs. */
-    record Entry(String actor, String action, Map<String, Object> details, OffsetDateTime at) {}
+    record Entry(String actor, String action, String entity, Map<String, Object> details, OffsetDateTime at) {}
 
     /** Adds an entry about something of the procedure, such as a task or a document. */
     void append(
@@ -50,7 +50,7 @@ class AuditLog {
     /** The newest entry with this action about this entity, such as the decision on a task. */
     Optional<Entry> last(String action, UUID entity) {
         return jdbc.sql("""
-                        select actor_id, action, details, occurred_at from engine.audit_log
+                        select actor_id, action, entity_id, details, occurred_at from engine.audit_log
                         where action = :action and entity_id = :entity order by id desc limit 1""")
                 .param("action", action)
                 .param("entity", entity.toString())
@@ -61,7 +61,7 @@ class AuditLog {
     /** The procedure's newest entry with this action. */
     Optional<Entry> latest(UUID procedure, String action) {
         return jdbc.sql("""
-                        select actor_id, action, details, occurred_at from engine.audit_log
+                        select actor_id, action, entity_id, details, occurred_at from engine.audit_log
                         where procedure_id = :procedure and action = :action order by id desc limit 1""")
                 .param("procedure", procedure)
                 .param("action", action)
@@ -72,7 +72,7 @@ class AuditLog {
     /** The procedure's entries, the oldest first. */
     List<Entry> of(UUID procedure) {
         return jdbc.sql("""
-                        select actor_id, action, details, occurred_at from engine.audit_log
+                        select actor_id, action, entity_id, details, occurred_at from engine.audit_log
                         where procedure_id = :procedure order by occurred_at, id""").param("procedure", procedure).query(this::entry).list();
     }
 
@@ -80,6 +80,7 @@ class AuditLog {
         return new Entry(
                 row.getString("actor_id"),
                 row.getString("action"),
+                row.getString("entity_id"),
                 details(row.getString("details")),
                 row.getObject("occurred_at", OffsetDateTime.class));
     }
