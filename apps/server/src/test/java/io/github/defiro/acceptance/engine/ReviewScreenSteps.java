@@ -14,6 +14,7 @@ import io.github.defiro.acceptance.WebBrowser;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -28,11 +29,17 @@ public class ReviewScreenSteps {
     private int clicks;
     private boolean confirmationAsked;
 
+    @Autowired
+    ReviewSteps review;
+
+    @Autowired
+    RequestSteps requests;
+
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
     int port;
 
-    @Before("@UC17 and @browser")
+    @Before("(@UC17 or @UC19) and @browser")
     public void openTheBrowser() {
         browser = WebBrowser.open(port);
         page = browser.page();
@@ -43,7 +50,7 @@ public class ReviewScreenSteps {
         });
     }
 
-    @After("@UC17 and @browser")
+    @After("(@UC17 or @UC19) and @browser")
     public void closeTheBrowser() {
         browser.close();
     }
@@ -84,6 +91,105 @@ public class ReviewScreenSteps {
                 .containsText(text);
         assertThat(decision()).hasCount(0);
         assertThat(button("Aprovar")).hasCount(0);
+    }
+
+    // UC19: the notes, on the request the reviewer took, opened from the inbox
+
+    @When("he reviews the request {string}")
+    public void heReviewsTheRequest(String reference) {
+        reviewsTheRequest(review.taker(), reference);
+    }
+
+    @When("on his screen {person} leaves the note {string} on {string}")
+    public void onHisScreenLeavesTheNote(String person, String text, String label) {
+        reviewsTheRequest(person, requests.reference());
+        noteButton(label).click();
+        noteBox(label).fill(text);
+        button("Guardar nota").click();
+    }
+
+    @When("on his screen {person} changes his note on {string} to {string}")
+    public void onHisScreenChangesHisNote(String person, String label, String text) {
+        onHisScreenLeavesTheNote(person, text, label);
+    }
+
+    @When("on his screen {person} deletes his note on {string}, confirming")
+    public void onHisScreenDeletesHisNote(String person, String label) {
+        choosesApagar(person, label);
+        button("Apagar a nota").click();
+    }
+
+    @When("{person} chooses «Apagar» on his note on {string}")
+    public void choosesApagar(String person, String label) {
+        reviewsTheRequest(person, requests.reference());
+        page.getByRole(
+                        AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName(Pattern.compile("^Apagar\\s*a nota sobre " + label + "$")))
+                .click();
+    }
+
+    @When("on his screen {person} saves an empty note on {string}")
+    public void onHisScreenSavesAnEmptyNote(String person, String label) {
+        reviewsTheRequest(person, requests.reference());
+        noteButton(label).click();
+        button("Guardar nota").click();
+    }
+
+    @When("{person} types {int} characters in the note on {string}")
+    public void typesCharactersInTheNote(String person, int length, String label) {
+        reviewsTheRequest(person, requests.reference());
+        noteButton(label).click();
+        // Key by key, as a person types: the box itself stops at its limit
+        noteBox(label).pressSequentially("x".repeat(length));
+    }
+
+    @Then("his decision reads «{}»")
+    public void hisDecisionReads(String text) {
+        assertThat(page.getByRole(AriaRole.REGION, new Page.GetByRoleOptions().setName("A sua decisão")))
+                .containsText(text);
+    }
+
+    @Then("he sees the notice «{}»")
+    public void heSeesTheNotice(String text) {
+        assertThat(notice(text)).isVisible();
+    }
+
+    @Then("he sees «{}» next to the note and in a notice")
+    public void heSeesNextToTheNoteAndInANotice(String text) {
+        assertThat(page.getByRole(AriaRole.ALERT)).containsText(text);
+        assertThat(notice(text)).isVisible();
+    }
+
+    @Then("the note stays open for him to write or cancel")
+    public void theNoteStaysOpen() {
+        assertThat(page.getByRole(AriaRole.TEXTBOX)).isVisible();
+        assertThat(button("Cancelar")).isVisible();
+    }
+
+    @Then("the box keeps {int} of them, with «{}»")
+    public void theBoxKeeps(int length, String counter) {
+        assertThat(page.getByRole(AriaRole.TEXTBOX)).hasValue("x".repeat(length));
+        assertThat(page.getByText(counter, new Page.GetByTextOptions().setExact(true)))
+                .isVisible();
+    }
+
+    @Then("he is asked «{}», with «Apagar a nota» and «Cancelar»")
+    public void heIsAsked(String question) {
+        assertThat(page.getByText(question, new Page.GetByTextOptions().setExact(true)))
+                .isVisible();
+        assertThat(button("Apagar a nota")).isVisible();
+        assertThat(button("Cancelar")).isVisible();
+    }
+
+    private Locator noteButton(String label) {
+        return page.getByRole(
+                AriaRole.BUTTON,
+                new Page.GetByRoleOptions().setName(Pattern.compile("^(Nota|Editar nota)\\s*sobre " + label + "$")));
+    }
+
+    private Locator noteBox(String label) {
+        return page.getByRole(
+                AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName(Pattern.compile("^Nota sobre «" + label + "»")));
     }
 
     @When("{int} seconds go by")
