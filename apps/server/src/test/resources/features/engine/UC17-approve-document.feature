@@ -37,11 +37,16 @@ Feature: Approve a document
       | Validação da chefia    | Chefias da unidade do requerente |
       | Verificação financeira | Divisão Financeira               |
       | Validação final        | RH · Formação                    |
+    # The mockup gives its dates relative to the day it is opened (Partida 14 days before, at 07:30;
+    #   Regresso 12 days before, at 19:40; corrected to 13 days before, at 19:10). They are fixed
+    #   here from 22/11/2026, the day this draft was written, in the prototype's format.
     And Ana Ferreira submitted the request "AC-2026-0147" for "Ajudas de custo" with
       | field      | answer                          |
       | Motivo     | Formação                        |
       | Destino    | Lisboa                          |
       | Descrição  | Formação em Contratação Pública |
+      | Partida    | 08/11/2026 07:30                |
+      | Regresso   | 10/11/2026 19:40                |
       | Transporte | Transportes públicos            |
       | NIF        | 234 567 418                     |
       | IBAN       | PT50 0035 0000 1234 5678 9015 4 |
@@ -83,11 +88,11 @@ Feature: Approve a document
     # a new file is marked «Novo na versão 2». The correction is the one of the mockup.
 
     Background:
-      Given Ana Ferreira corrected "Regresso" and attached "certificado_presenca.pdf", resubmitting the request "AC-2026-0147" as version 2
+      Given Ana Ferreira corrected "Regresso" to "09/11/2026 19:10" and attached "certificado_presenca.pdf", resubmitting the request "AC-2026-0147" as version 2
 
     Scenario: A changed field shows its previous answer
       When Rui Matos opens the request "AC-2026-0147"
-      Then "Regresso" is marked as changed, with the answer of version 1 before it
+      Then "Regresso" is marked as changed, with the answer of version 1, "10/11/2026 19:40", before it
       And "Destino" is not marked as changed
 
     Scenario: A new file is marked as new in this version
@@ -200,7 +205,7 @@ Feature: Approve a document
 
     Scenario: A returned request comes back corrected and is approved
       Given Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente", with the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Certificado de presença"
-      And Ana Ferreira corrected "Regresso" and attached "certificado_presenca.pdf", resubmitting it as version 2
+      And Ana Ferreira corrected "Regresso" to "09/11/2026 19:10" and attached "certificado_presenca.pdf", resubmitting it as version 2
       When Rui Matos approves the request "AC-2026-0147" from his inbox, after seeing what changed
       Then he is back on his inbox with the notice «Pedido aprovado»
       And the request is at "Verificação financeira"
