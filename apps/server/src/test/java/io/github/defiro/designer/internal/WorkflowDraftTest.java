@@ -2,6 +2,7 @@ package io.github.defiro.designer.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.defiro.spec.FieldSpecification;
 import io.github.defiro.spec.PluginRef;
 import io.github.defiro.spec.Transition;
 import io.github.defiro.spec.WorkflowSpecification;
@@ -62,7 +63,8 @@ class WorkflowDraftTest {
 
     @Test
     void aReviewStepNeedsANameSomeoneToHandleItAndADeadline() {
-        Step unanswered = new Step("n2", REVIEW, "", null, null, List.of(), List.of("Pedido não autorizado"));
+        Step unanswered =
+                new Step("n2", REVIEW, "", null, null, List.of(), List.of("Pedido não autorizado"), List.of());
 
         assertThat(withSteps(unanswered).problems(CATALOGUE))
                 .containsExactly(
@@ -228,15 +230,102 @@ class WorkflowDraftTest {
                 .isEqualTo(file.transitions());
     }
 
+    @Test
+    void aWorkflowWithNoQuestionForTheRequesterIsRefused() {
+        assertThat(asking().problems(CATALOGUE))
+                .containsExactly(
+                        new Problem(
+                                "steps[0].fields",
+                                "Formulário do pedido: ainda não tem perguntas para quem faz o pedido… crie pelo menos uma pergunta, por exemplo «Material pedido»"));
+    }
+
+    @Test
+    void aQuestionNeedsALabel() {
+        FieldSpecification unlabelled = new FieldSpecification("q2", " ", "number", false, List.of());
+
+        assertThat(asking(MATERIAL, unlabelled).problems(CATALOGUE))
+                .containsExactly(
+                        new Problem("steps[0].fields[1].label", "Formulário do pedido, campo 2: falta o rótulo."));
+    }
+
+    @Test
+    void aSingleChoiceNeedsAtLeastTwoOptions() {
+        FieldSpecification transport =
+                new FieldSpecification("q1", "Transporte", "single-choice", true, List.of("Carro próprio", " "));
+
+        assertThat(asking(transport).problems(CATALOGUE))
+                .containsExactly(new Problem(
+                        "steps[0].fields[0].options",
+                        "Formulário do pedido, campo 1 («Transporte»): faltam opções de resposta (pelo menos duas)."));
+        assertThat(asking(new FieldSpecification(
+                                "q1", "Transporte", "single-choice", true, List.of("Carro", "Comboio")))
+                        .problems(CATALOGUE))
+                .isEmpty();
+    }
+
+    @Test
+    void aQuestionHasOneOfTheAnswerTypes() {
+        FieldSpecification colour = new FieldSpecification("q1", "Cor", "colour", true, List.of());
+
+        assertThat(asking(colour).problems(CATALOGUE))
+                .containsExactly(new Problem(
+                        "steps[0].fields[0].type",
+                        "Formulário do pedido, campo 1 («Cor»): o tipo de resposta colour não existe."));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"short-text", "long-text", "number", "date", "date-time", "yes-no", "files"})
+    void everyAnswerTypeButTheSingleChoiceNeedsNoOptions(String type) {
+        assertThat(asking(new FieldSpecification("q1", "Pergunta", type, false, List.of()))
+                        .problems(CATALOGUE))
+                .isEmpty();
+    }
+
+    @Test
+    void onlyTheRequestAsksQuestions() {
+        Step review = complete("Validação da chefia").withFields(List.of(MATERIAL));
+
+        assertThat(withSteps(review).problems(CATALOGUE))
+                .containsExactly(
+                        new Problem("steps[1].fields", "Passo 2 («Validação da chefia»): só o pedido tem perguntas."));
+    }
+
+    @Test
+    void theQuestionsGoIntoTheWorkflowFileAndComeBack() {
+        WorkflowDraft draft = asking(
+                MATERIAL,
+                new FieldSpecification("q2", "Transporte", "single-choice", true, List.of("Carro", "Comboio")));
+
+        WorkflowSpecification file = draft.specification(OUTCOMES::get);
+
+        assertThat(file.steps().getFirst().fields())
+                .extracting(FieldSpecification::label)
+                .containsExactly("Material pedido", "Transporte");
+        assertThat(file.steps().get(1).fields()).isEmpty();
+        assertThat(WorkflowDraft.from(file)).isEqualTo(draft);
+    }
+
     /** "Ajudas de custo": the request, then these steps. */
     static WorkflowDraft withSteps(Step... steps) {
         return named("Ajudas de custo", steps);
     }
 
+    /** The workflow's request asks «Material pedido», so that only what a test is about is missing. */
     static WorkflowDraft named(String name, Step... steps) {
-        List<Step> path = new ArrayList<>(WorkflowDraft.named(name, SUBMISSION).steps());
+        Step request = WorkflowDraft.named(name, SUBMISSION).steps().getFirst().withFields(List.of(MATERIAL));
+        List<Step> path = new ArrayList<>(List.of(request));
         path.addAll(List.of(steps));
         return new WorkflowDraft(name, path);
+    }
+
+    static final FieldSpecification MATERIAL =
+            new FieldSpecification("material", "Material pedido", "short-text", true, List.of());
+
+    static WorkflowDraft asking(FieldSpecification... fields) {
+        WorkflowDraft draft = withSteps(complete("Validação da chefia"));
+        List<Step> path = new ArrayList<>(draft.steps());
+        path.set(0, path.getFirst().withFields(List.of(fields)));
+        return new WorkflowDraft(draft.name(), path);
     }
 
     /** A review step with every answer: who handles it, a deadline and one reason of each kind. */
@@ -248,7 +337,8 @@ class WorkflowDraftTest {
                 "Chefias da unidade do requerente",
                 5,
                 List.of("Preenchido incorretamente"),
-                List.of("Pedido não autorizado"));
+                List.of("Pedido não autorizado"),
+                List.of());
     }
 
     static Step finalValidation() {
@@ -259,6 +349,7 @@ class WorkflowDraftTest {
                 "Divisão Financeira",
                 10,
                 List.of("Preenchido incorretamente"),
-                List.of("Pedido não autorizado"));
+                List.of("Pedido não autorizado"),
+                List.of());
     }
 }

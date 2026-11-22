@@ -111,6 +111,7 @@ class SpecificationVersionsIT {
                 "Todos os trabalhadores",
                 null,
                 List.of(),
+                List.of(),
                 List.of());
         return new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, name, List.of(request), List.of());
     }
