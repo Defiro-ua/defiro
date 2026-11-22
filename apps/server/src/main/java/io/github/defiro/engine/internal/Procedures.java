@@ -13,6 +13,19 @@ import tools.jackson.databind.json.JsonMapper;
 @Repository
 class Procedures {
 
+    /**
+     * The document of the request: the one of the first step of the procedure's path. A procedure
+     * has other documents, of other steps, and the request's changes when it is corrected. The %s
+     * is the procedure's id; the aliases are the query's own, so it can be a subquery.
+     */
+    static final String REQUEST_DOCUMENT = """
+            select request_document.data from engine.document request_document
+            join engine.procedure request_procedure on request_procedure.id = request_document.procedure_id
+            join engine.specification_version request_version
+                on request_version.draft = request_procedure.draft and request_version.version = request_procedure.version
+            where request_document.procedure_id = %s
+              and request_document.step_id = request_version.specification -> 'steps' -> 0 ->> 'id'""";
+
     private final JdbcClient jdbc;
     private final JsonMapper json;
 
@@ -73,10 +86,10 @@ class Procedures {
 
     /** The request: the document of the procedure's first step. */
     RequestData request(UUID procedure) {
-        String data =
-                jdbc.sql("""
-                        select data from engine.document where procedure_id = :procedure
-                        order by updated_at limit 1""").param("procedure", procedure).query(String.class).single();
+        String data = jdbc.sql(REQUEST_DOCUMENT.formatted(":procedure"))
+                .param("procedure", procedure)
+                .query(String.class)
+                .single();
         return json.readValue(data, RequestData.class);
     }
 }

@@ -126,12 +126,10 @@ class Tasks {
                                r.data -> 'requester' ->> 'unit' as requester_unit
                         from engine.task t
                         join engine.procedure p on p.id = t.procedure_id
-                        cross join lateral (
-                            select data from engine.document d
-                            where d.procedure_id = p.id
-                            order by d.updated_at limit 1) r
+                        cross join lateral (%s) r
                         where t.status = :status %s
-                        order by p.created_at""".formatted(andWhere)).param("status", OPEN);
+                        order by p.created_at""".formatted(Procedures.REQUEST_DOCUMENT.formatted("p.id"), andWhere))
+                .param("status", OPEN);
         if (procedure != null) {
             query = query.param("procedure", procedure);
         }

@@ -100,6 +100,23 @@ class RequestsIT {
     }
 
     @Test
+    void theRequestIsTheDocumentOfTheFirstStepWhateverOtherDocumentsTheProcedureHas() {
+        // A later step's document, older than the request's last change (as after a resubmission)
+        jdbc.sql("""
+                        insert into engine.document (id, procedure_id, step_id, data, status, updated_at)
+                        values (:id, :procedure, 'a-later-step', '{"notes": []}', 'draft', now() - interval '1 day')""")
+                .param("id", UUID.randomUUID())
+                .param("procedure", submitted.procedure())
+                .update();
+
+        assertThat(requests.open(reference, person("carla", "Divisão Financeira")))
+                .hasValueSatisfying(opened -> {
+                    assertThat(opened.requester().name()).isEqualTo("Ana Ferreira");
+                    assertThat(opened.task()).as("the candidate's task").isEqualTo(submitted.task());
+                });
+    }
+
+    @Test
     void thereIsNoRequestWithAnUnknownReference() {
         assertThat(requests.open("IT-unknown", person("ana", "Divisão de Obras Municipais")))
                 .isEmpty();
