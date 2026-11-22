@@ -232,6 +232,7 @@ public class CreateWorkflowSteps {
     public void sheHasTheFileOfTheWorkflow(String name, String request, String review) {
         Map<String, Object> requestStep = new HashMap<>(steps().getFirst());
         requestStep.put("name", request);
+        requestStep.put("fields", List.of(FormFieldsSteps.field("Material pedido", "short-text", true, List.of())));
         Map<String, Object> reviewStep = reviewStep(review, "Chefias da unidade do requerente", 5);
         reviewStep.put("returnReasons", List.of("Preenchido incorretamente"));
         reviewStep.put("rejectReasons", List.of("Pedido não autorizado"));
@@ -346,9 +347,13 @@ public class CreateWorkflowSteps {
         save();
     }
 
+    /** A review step with every answer, and a request form that asks «Material pedido» (UC04) */
     @Given("the workflow is complete")
     public void theWorkflowIsComplete() {
-        giveReasons("Validação da chefia", List.of("Preenchido incorretamente"), List.of("Pedido não autorizado"));
+        if (requestFields().isEmpty()) {
+            requestFields().add(FormFieldsSteps.field("Material pedido", "short-text", true, List.of()));
+        }
+        completeThePath();
     }
 
     @Given("{string} was created")
@@ -398,6 +403,49 @@ public class CreateWorkflowSteps {
     @Then("{string} is listed")
     public void isListed(String name) {
         response.then().statusCode(200).body("find { it.id == '%s' }.name".formatted(draftId), equalTo(name));
+    }
+
+    // ——— for the other features of the designer (UC04), which share this scenario's draft
+
+    String draftId() {
+        return draftId;
+    }
+
+    DesignerScreen screen() {
+        return screen;
+    }
+
+    boolean acted() {
+        return acted;
+    }
+
+    void act() {
+        acted = true;
+    }
+
+    /** The questions of the request form, as the browser holds them; changes are saved with saveDraft */
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> requestFields() {
+        Map<String, Object> request = steps().getFirst();
+        if (!(request.get("fields") instanceof ArrayList)) {
+            Object fields = request.get("fields");
+            request.put(
+                    "fields", fields == null ? new ArrayList<>() : new ArrayList<>((List<Map<String, Object>>) fields));
+        }
+        return (List<Map<String, Object>>) request.get("fields");
+    }
+
+    void saveDraft() {
+        save();
+    }
+
+    Response loadDraft() {
+        return load();
+    }
+
+    /** A review step with every answer, so that only what a scenario is about is missing */
+    void completeThePath() {
+        giveReasons("Validação da chefia", List.of("Preenchido incorretamente"), List.of("Pedido não autorizado"));
     }
 
     /** Gives the step these reasons, adding it first, complete, if the path does not have it. */

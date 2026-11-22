@@ -107,6 +107,53 @@ final class DesignerScreen implements AutoCloseable {
                 .filter(new Locator.FilterOptions().setHasText(name));
     }
 
+    // ——— the request form (UC04)
+
+    private Locator formFields() {
+        return page.getByRole(AriaRole.LIST, new Page.GetByRoleOptions().setName("Campos do formulário"))
+                .getByRole(AriaRole.LISTITEM);
+    }
+
+    /** The rows of the form that come from the profile and cannot be changed */
+    Locator profileRows() {
+        return formFields().filter(new Locator.FilterOptions().setHasText("Do perfil (IdP)"));
+    }
+
+    /** The questions for the requester, in order */
+    Locator requesterRows() {
+        return formFields().filter(new Locator.FilterOptions().setHasNotText("Do perfil (IdP)"));
+    }
+
+    void addQuestion() {
+        button("Acrescentar campo").click();
+        question().waitFor();
+    }
+
+    void removeQuestion(String label) {
+        button("Remover o campo «" + label + "»").click();
+    }
+
+    Locator questionLabel() {
+        return page.getByLabel(Pattern.compile("^Rótulo"));
+    }
+
+    /** The cards of the answer types */
+    Locator answerTypes() {
+        return page.getByRole(AriaRole.GROUP, new Page.GetByRoleOptions().setName(Pattern.compile("^Tipo de resposta")))
+                .getByRole(AriaRole.RADIO);
+    }
+
+    /** The card of an answer type, by its name: «Data» is not «Data e hora» */
+    Locator answerType(String name) {
+        return page.getByRole(AriaRole.GROUP, new Page.GetByRoleOptions().setName(Pattern.compile("^Tipo de resposta")))
+                .getByText(name, new Locator.GetByTextOptions().setExact(true));
+    }
+
+    Locator mandatory() {
+        return page.getByRole(
+                AriaRole.CHECKBOX, new Page.GetByRoleOptions().setName(Pattern.compile("^Resposta obrigatória")));
+    }
+
     private Locator button(String name) {
         return page.getByRole(
                 AriaRole.BUTTON, new Page.GetByRoleOptions().setName(name).setExact(true));
