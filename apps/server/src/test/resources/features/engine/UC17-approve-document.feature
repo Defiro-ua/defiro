@@ -162,6 +162,7 @@ Feature: Approve a document
       Given Rui Matos approved the request "AC-2026-0147"
       When he undoes his approval
       Then the request is back at "Validação da chefia", in the inbox of Rui Matos
+      And it is back in the inbox of Segunda Chefia
       And it is no longer in the inbox of Carla Dias
 
     Scenario: Undoing is refused once the next step was acted on
@@ -172,14 +173,16 @@ Feature: Approve a document
       And the request is still at "Validação final"
 
     Scenario: Only the reviewer who approved can undo
+      # Segunda Chefia could have approved it too, as a candidate of the step, but she did not.
       Given Rui Matos approved the request "AC-2026-0147"
-      When Carla Dias undoes his approval
+      When Segunda Chefia undoes his approval
       Then she is not allowed to
 
     Scenario: Undoing is logged in the history
       Given Rui Matos approved the request "AC-2026-0147"
       When he undoes his approval
       Then the newest entry of its history is "Rui Matos, Chefe de Divisão, desfez a aprovação do passo «Validação da chefia»", with the date and time of the undoing
+      And its history still shows "Rui Matos, Chefe de Divisão, aprovou o passo «Validação da chefia»"
 
     @browser
     Scenario: The notice offers «Desfazer» and stays until it is closed

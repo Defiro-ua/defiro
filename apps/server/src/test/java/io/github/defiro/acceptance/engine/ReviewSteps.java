@@ -104,6 +104,17 @@ public class ReviewSteps {
         assertThat(inboxOf(person)).doesNotContain(reference);
     }
 
+    @Then("it is back in the inbox of {person}")
+    public void itIsBackInTheInboxOf(String person) {
+        assertThat(inboxOf(person)).contains(reference);
+    }
+
+    // Nothing is erased from the history
+    @Then("its history still shows {string}")
+    public void itsHistoryStillShows(String entry) {
+        assertThat(history()).contains(entry);
+    }
+
     @Then("the newest entry of its history is {string}, with the date and time of the undoing")
     public void theNewestEntryOfItsHistoryIs(String entry) {
         theNewestEntriesAre(List.of(entry));
