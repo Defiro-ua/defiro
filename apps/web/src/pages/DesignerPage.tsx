@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
-import { listStepTypes, loadDraft, publishDraft, saveDraft, startDraft, type StepType } from '../api/designer'
+import { listGroups, listStepTypes, loadDraft, publishDraft, saveDraft, startDraft, type GroupChoices, type GroupOption, type StepType } from '../api/designer'
 import { IconButton } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { ArrowHint, FieldError, Req, StepError, WizardFooter } from '../components/form'
@@ -24,7 +24,6 @@ import {
   type ReasonList,
   type Step,
 } from '../designer/draft'
-import { groups } from '../designer/groups'
 import { domId, isScreen, kindOf, numberOf, ofForm, ofPath, screenOfField, screenOrder, SCREENS } from '../designer/screens'
 import { cx } from '../lib/cx'
 import { focusSoon } from '../lib/focus'
@@ -35,7 +34,7 @@ import { FieldEditor, FieldList } from './RequestFormScreens'
 
 const stepName = (s: Step) => s.name || 'Passo sem nome'
 
-type Loaded = { id: string; draft: Draft; types: StepType[] }
+type Loaded = { id: string; draft: Draft; types: StepType[]; groups: GroupChoices }
 
 /**
  * «Criar workflow» (UC03): a new draft at /workflows/criar, an existing one at /workflows/criar/:id.
@@ -62,8 +61,8 @@ export function DesignerPage() {
   useEffect(() => {
     if (!allowed || !id) return
     let current = true
-    Promise.all([loadDraft(id), listStepTypes()]).then(
-      ([draft, types]) => current && setLoaded(draft ? { id, draft: { name: draft.name, steps: draft.steps }, types } : 'missing'),
+    Promise.all([loadDraft(id), listStepTypes(), listGroups()]).then(
+      ([draft, types, groups]) => current && setLoaded(draft ? { id, draft: { name: draft.name, steps: draft.steps }, types, groups } : 'missing'),
       () => current && setLoaded('failed'),
     )
     return () => {
@@ -88,7 +87,7 @@ export function DesignerPage() {
   return <Designer key={loaded.id} {...loaded} />
 }
 
-function Designer({ id, draft: first, types }: Loaded) {
+function Designer({ id, draft: first, types, groups }: Loaded) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [draft, setDraft] = useState(first)
@@ -296,25 +295,17 @@ function Designer({ id, draft: first, types }: Loaded) {
   else if (fromReview && startSection) nextText = 'Guardar e voltar à revisão'
   else if (order[order.indexOf(known) + 1] === 'rever') nextText = 'Rever o workflow'
 
-  const groupCards = (radioName: string, chosen: string | null, pick: (g: string) => void, everyone: boolean) => (
+  /** The Designer's options: who can request, or who can handle a step (UC05) */
+  const groupCards = (radioName: string, chosen: string | null, pick: (g: string) => void, options: GroupOption[]) => (
     <div className="flex flex-wrap gap-2.5">
-      {groups
-        .filter((g) => everyone || g.nome !== 'Todos os trabalhadores')
-        .map((g) => (
-          <label key={g.nome} className={cardClass(chosen === g.nome, 'min-h-16 flex-[1_1_300px]')}>
-            <input
-              type="radio"
-              name={radioName}
-              value={g.nome}
-              checked={chosen === g.nome}
-              onChange={() => pick(g.nome)}
-              className={cx(radioClass, 'mt-0.5')}
-            />
-            <span className="text-[16px] leading-[22px] font-semibold">
-              {g.nome} <span className="mt-0.5 block text-label-sm leading-[18px] font-normal text-ink-3">{g.nota}</span>
-            </span>
-          </label>
-        ))}
+      {options.map((g) => (
+        <label key={g.name} className={cardClass(chosen === g.name, 'min-h-16 flex-[1_1_300px]')}>
+          <input type="radio" name={radioName} value={g.name} checked={chosen === g.name} onChange={() => pick(g.name)} className={cx(radioClass, 'mt-0.5')} />
+          <span className="text-[16px] leading-[22px] font-semibold">
+            {g.name} <span className="mt-0.5 block text-label-sm leading-[18px] font-normal text-ink-3">{g.note}</span>
+          </span>
+        </label>
+      ))}
     </div>
   )
 
@@ -351,7 +342,7 @@ function Designer({ id, draft: first, types }: Loaded) {
         <legend className="sr-only">Quem pode fazer o pedido (obrigatório)</legend>
         <ArrowHint />
         {f.error && <FieldError id={'erro-' + f.id}>{f.error}</FieldError>}
-        {groupCards('quem-pedido', request.handledBy, (g) => change({ t: 'step', step: request.id, k: 'handledBy', v: g }), true)}
+        {groupCards('quem-pedido', request.handledBy, (g) => change({ t: 'step', step: request.id, k: 'handledBy', v: g }), groups.requesters)}
       </fieldset>
     )
   } else if (step && kind === 'pn') {
@@ -395,7 +386,7 @@ function Designer({ id, draft: first, types }: Loaded) {
             Os grupos e as unidades vêm do fornecedor de identidade (IdP) da organização.
           </span>
           {fq.error && <FieldError id={'erro-' + fq.id}>{fq.error}</FieldError>}
-          {groupCards('quem-' + step.id, step.handledBy, (g) => change({ t: 'step', step: step.id, k: 'handledBy', v: g }), false)}
+          {groupCards('quem-' + step.id, step.handledBy, (g) => change({ t: 'step', step: step.id, k: 'handledBy', v: g }), groups.handlers)}
         </fieldset>
       </div>
     )

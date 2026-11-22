@@ -22,7 +22,7 @@ API, for Workflow Managers only:
 | `steps[].id` | The step's id, unique in the file. Transitions name steps by it. |
 | `steps[].plugin` | The step type, a plugin of the Registry's catalogue: `{ "name": "review", "version": "0.1.0" }`. The built-in ones are `submission` (the request), `review`, `final-validation` and `document-generation`. |
 | `steps[].name` | The step's name in the path, for example «Validação da chefia». |
-| `steps[].handledBy` | The group or unit that handles the step; for the request, who can make it. |
+| `steps[].handledBy` | The group or unit that handles the step; for the request, who can make it. It is one of the Designer's options (`GET /api/designer/groups`, UC05): «Todos os trabalhadores» for the request, «Chefias da unidade do requerente» for a step, or a group or unit of the organization's directory. |
 | `steps[].deadline` | The legal deadline in working days, from 1 to 90; `null` for the request. |
 | `steps[].returnReasons` | Why the step may return the request to the requester, to be corrected. |
 | `steps[].rejectReasons` | Why the step may reject the request for good. |
