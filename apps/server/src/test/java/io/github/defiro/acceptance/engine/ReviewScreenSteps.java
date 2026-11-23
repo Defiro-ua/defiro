@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
- * The {@code @browser} scenarios of UC17, in a real browser on the web app: the reviewer signs in
+ * The {@code @browser} scenarios of UC17 and UC19, in a real browser on the web app: the reviewer signs in
  * as in UC01, lands on the inbox, and reviews from there. Everything is found by its role and
  * accessible name, as a screen reader finds it. The request is the Background's, through the API.
  */
@@ -39,7 +39,7 @@ public class ReviewScreenSteps {
     @Value("${local.server.port}")
     int port;
 
-    @Before("(@UC17 or @UC19) and @browser")
+    @Before("(@UC17 or @UC18 or @UC19) and @browser")
     public void openTheBrowser() {
         browser = WebBrowser.open(port);
         page = browser.page();
@@ -50,7 +50,7 @@ public class ReviewScreenSteps {
         });
     }
 
-    @After("(@UC17 or @UC19) and @browser")
+    @After("(@UC17 or @UC18 or @UC19) and @browser")
     public void closeTheBrowser() {
         browser.close();
     }
@@ -247,6 +247,16 @@ public class ReviewScreenSteps {
                 new Page.GetByRoleOptions().setName(Pattern.compile("^Rever\\s*o pedido " + reference + " ")));
     }
 
+    // For the other screen steps of the review stories (RejectScreenSteps)
+
+    Page page() {
+        return page;
+    }
+
+    void signIn(String person) {
+        browser.signIn(person);
+    }
+
     private void click(Locator target) {
         target.click();
         clicks++;
@@ -257,7 +267,7 @@ public class ReviewScreenSteps {
     }
 
     // The notice's title; what follows it is read out to screen readers only
-    private Locator notice(String text) {
+    Locator notice(String text) {
         // Playwright runs the pattern in the browser, as JavaScript, which has no \Q…\E quoting
         String escaped = text.replaceAll("[.*+?^${}()|\\[\\]\\\\]", "\\\\$0");
         return page.getByRole(AriaRole.STATUS).getByText(Pattern.compile("^" + escaped));

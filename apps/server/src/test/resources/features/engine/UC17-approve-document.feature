@@ -107,7 +107,7 @@ Feature: Approve a document
 
   @browser
   Rule: Approve is the main button and comes last in its group
-    # «Devolver para correção» and «Rejeitar o pedido» are UC18: until then they are shown but disabled.
+    # «Devolver para correção» and «Rejeitar o pedido» are UC18.
 
     Scenario: The decision buttons end with «Aprovar»
       When Rui Matos reviews the request "AC-2026-0147"
