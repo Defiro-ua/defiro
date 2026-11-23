@@ -3,6 +3,8 @@ package io.github.defiro.plugin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -10,35 +12,51 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class EntryTest {
 
-    @Test
-    void aStepThatWaitsSaysWhoHandlesIt() {
-        Entry entry = new Entry.Wait("divisao-financeira");
+    static final GeneratedDocument ORDER =
+            new GeneratedDocument("ordem-de-pagamento.pdf", "application/pdf", new byte[] {1, 2, 3});
 
-        assertThat(entry).isEqualTo(new Entry.Wait("divisao-financeira"));
-        assertThat(((Entry.Wait) entry).handledBy()).isEqualTo("divisao-financeira");
+    @Test
+    void aStepThatWaitsSaysWhoShouldAct() {
+        Entry entry = new Entry.Wait(new AssigneeRule.Group("divisao-financeira"));
+
+        assertThat(entry).isEqualTo(new Entry.Wait(new AssigneeRule.Group("divisao-financeira")));
     }
 
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = " ")
-    void aStepCannotWaitForNobody(String handledBy) {
-        assertThatThrownBy(() -> new Entry.Wait(handledBy))
+    @Test
+    void aStepCannotWaitForNobody() {
+        assertThatThrownBy(() -> new Entry.Wait(null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("who handles");
+                .hasMessageContaining("who should act");
     }
 
     @Test
-    void aStepThatIsDoneAtOnceSaysHowItEnded() {
-        Entry entry = new Entry.Done("generated");
+    void aStepThatIsDoneAtOnceSaysHowItEndedAndWhatItGenerated() {
+        Entry.Done done = new Entry.Done("done", List.of(ORDER));
 
-        assertThat(((Entry.Done) entry).outcome()).isEqualTo("generated");
+        assertThat(done.outcome()).isEqualTo("done");
+        assertThat(done.documents()).containsExactly(ORDER);
+    }
+
+    @Test
+    void aStepThatGeneratesNothingHasNoDocuments() {
+        assertThat(new Entry.Done("done", null).documents()).isEmpty();
+    }
+
+    @Test
+    void theDocumentsCannotChangeAfterTheStepIsDone() {
+        List<GeneratedDocument> documents = new ArrayList<>(List.of(ORDER));
+        Entry.Done done = new Entry.Done("done", documents);
+
+        documents.clear();
+
+        assertThat(done.documents()).containsExactly(ORDER);
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = " ")
     void aStepCannotBeDoneWithoutAnOutcome(String outcome) {
-        assertThatThrownBy(() -> new Entry.Done(outcome))
+        assertThatThrownBy(() -> new Entry.Done(outcome, List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("outcome");
     }

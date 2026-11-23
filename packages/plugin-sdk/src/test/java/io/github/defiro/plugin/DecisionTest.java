@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -12,28 +13,43 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class DecisionTest {
 
-    @Test
-    void aDecisionKeepsItsReasons() {
-        Decision decision = new Decision("returned", List.of("Incorrectly filled", "Missing receipt"));
+    static final Person RUI = new Person("rui", "Rui Matos", "Chefe de Divisão", null, null);
 
-        assertThat(decision.action()).isEqualTo("returned");
-        assertThat(decision.reasons()).containsExactly("Incorrectly filled", "Missing receipt");
+    @Test
+    void submittingIsADecisionWithTheData() {
+        Decision decision = Decision.submit(Map.of("destino", "Lisboa"));
+
+        assertThat(decision.action()).isEqualTo("submit");
+        assertThat(decision.data()).containsEntry("destino", "Lisboa");
+        assertThat(decision.reasons()).isEmpty();
+        assertThat(decision.notes()).isEmpty();
+        assertThat(decision.message()).isNull();
     }
 
     @Test
-    void aDecisionWithNoReasonsHasAnEmptyList() {
-        assertThat(new Decision("submitted", null).reasons()).isEmpty();
+    void aReturnKeepsItsReasonsMessageAndNotes() {
+        FieldNote note = new FieldNote("iban", "O IBAN não corresponde ao seu nome.", RUI);
+
+        Decision decision = new Decision(
+                "return", null, List.of("Incorrectly filled"), "Corrija o IBAN, por favor.", List.of(note));
+
+        assertThat(decision.data()).isEmpty();
+        assertThat(decision.reasons()).containsExactly("Incorrectly filled");
+        assertThat(decision.message()).isEqualTo("Corrija o IBAN, por favor.");
+        assertThat(decision.notes()).containsExactly(note);
     }
 
     @Test
-    void theReasonsCannotChangeAfterTheDecision() {
+    void theDecisionCannotChangeAfterItIsMade() {
         List<String> reasons = new ArrayList<>(List.of("Incorrectly filled"));
-        Decision decision = new Decision("returned", reasons);
+        Decision decision = new Decision("return", Map.of(), reasons, null, null);
 
         reasons.add("Missing receipt");
 
         assertThat(decision.reasons()).containsExactly("Incorrectly filled");
         assertThatThrownBy(() -> decision.reasons().add("Missing receipt"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> decision.data().put("destino", "Porto"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -41,7 +57,7 @@ class DecisionTest {
     @NullAndEmptySource
     @ValueSource(strings = " ")
     void aDecisionNeedsAnAction(String action) {
-        assertThatThrownBy(() -> new Decision(action, List.of()))
+        assertThatThrownBy(() -> new Decision(action, null, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("action");
     }

@@ -9,11 +9,7 @@ package io.github.defiro.plugin;
 public record FieldProblem(String field, String message) {
 
     public FieldProblem {
-        if (field == null || field.isBlank()) {
-            throw new IllegalArgumentException("A problem belongs to a field");
-        }
-        if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("A problem needs a message saying what is wrong");
-        }
+        Require.text(field, "A problem belongs to a field");
+        Require.text(message, "A problem needs a message saying what is wrong");
     }
 }
