@@ -5,8 +5,8 @@ import { Icon, type IconName } from './Icon'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutro'
 
-/** A short message about what just happened; `texto` is read out to screen readers only */
-export type Notice = { titulo: string; texto?: string; tom?: Tone }
+/** A short message about what just happened; `texto` is read out to screen readers only, `detalhe` is shown */
+export type Notice = { titulo: string; texto?: string; detalhe?: string; tom?: Tone }
 
 const toneColor = { ok: 'bg-success', warn: 'bg-warning', bad: 'bg-error', info: 'bg-info', neutro: 'bg-ink-2' } as const
 const toneGlyph: Partial<Record<Tone, IconName>> = { ok: 'check', warn: 'reset', bad: 'x' }
@@ -45,9 +45,10 @@ export function Flash({ notice, onClose, onUndo }: FlashProps) {
           <span aria-hidden="true" className={cx('grid size-7 shrink-0 place-items-center rounded-full text-bg', toneColor[tom])}>
             <Icon name={toneGlyph[tom] || 'check'} size={16} />
           </span>
-          <p className="m-0 text-[15px] leading-[22px] font-semibold">
+          <p className="m-0 min-w-0 text-[15px] leading-[22px] font-semibold">
             {notice.titulo}
             {notice.texto && <span className="sr-only">. {notice.texto}</span>}
+            {notice.detalhe && <span className="block text-[14px] leading-[21px] font-normal">{notice.detalhe}</span>}
           </p>
           {onUndo && (
             <Button variant="secondary" size="s" icon="reset" className="min-h-9 px-3" onClick={onUndo}>

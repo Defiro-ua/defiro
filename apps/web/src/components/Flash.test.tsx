@@ -22,6 +22,14 @@ describe('Flash', () => {
     expect(screen.getByText('Pedido aprovado').parentElement).not.toHaveClass('animate-notice')
   })
 
+  it('reads `texto` to screen readers only, and shows `detalhe` to everyone', async () => {
+    const notice = { titulo: 'Pedido rejeitado', texto: 'AC-2026-0147 foi encerrado.', detalhe: 'Motivo: Fora do prazo legal.' }
+    render(<Flash notice={notice} onClose={() => {}} />)
+
+    expect(await screen.findByText(/AC-2026-0147 foi encerrado\./)).toHaveClass('sr-only')
+    expect(screen.getByText('Motivo: Fora do prazo legal.')).not.toHaveClass('sr-only')
+  })
+
   it('closes', async () => {
     const close = vi.fn()
     render(<Flash notice={{ titulo: 'Pedido aprovado' }} onClose={close} onUndo={() => {}} />)

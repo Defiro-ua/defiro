@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { listInbox, take, undoApproval, type InboxItem } from '../api/engine'
+import { listInbox, take, undoDecision, type InboxItem } from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { Flash, type Notice } from '../components/Flash'
@@ -14,7 +14,7 @@ import { paths } from '../routes'
 
 /**
  * TEMPORARY, for UC27 (Daniel): the least of the task inbox that UC17 needs, the requests waiting
- * for this person, each with «Rever». After an approval it shows «Pedido aprovado» with «Desfazer».
+ * for this person, each with «Rever». After a decision it shows its notice with «Desfazer».
  * UC27 builds the real inbox, with deadlines and the person's own requests.
  */
 export function InboxPage() {
@@ -45,14 +45,14 @@ export function InboxPage() {
     undoing.current = true
     let outcome
     try {
-      outcome = await undoApproval(undo.task)
+      outcome = await undoDecision(undo.task)
     } catch {
       undoing.current = false
       setNotice(undoFailed)
       return
     }
     if (outcome.done) {
-      const state: ReviewState = { notice: undoneNotice }
+      const state: ReviewState = { notice: undoneNotice(outcome.result.decision) }
       navigate(paths.request(undo.reference), { state })
     } else {
       setUndo(undefined)

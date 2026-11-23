@@ -6,7 +6,8 @@ import { send, unexpected } from './http'
  */
 export type InboxItem = { task: string; reference: string; requester: string; step: string; reviewer: string | null; mine: boolean }
 
-export type RequestStep = { id: string; name: string; handledBy: string }
+/** A step of the path, with the reasons its reviewer may return or reject the request for (UC18) */
+export type RequestStep = { id: string; name: string; handledBy: string; returnReasons: string[]; rejectReasons: string[] }
 
 /** An answer of the current version; on a resubmitted request, a changed one keeps the one before */
 export type Answer = { field: string; label: string; value: string; changed: boolean; previous: string | null }
@@ -14,7 +15,11 @@ export type Answer = { field: string; label: string; value: string; changed: boo
 /** A file of the request, with the version it was attached in */
 export type RequestFile = { id: string; filename: string; version: number }
 
-export type HistoryLine = { at: string; text: string }
+/** An entry, with the reviewer's message when it returned or rejected the request */
+export type HistoryLine = { at: string; text: string; message: string | null }
+
+/** Who returned or rejected the request, as «Rui Matos, Chefe de Divisão», why, and what they wrote */
+export type Decision = { by: string; reasons: string[]; message: string | null }
 
 /** A request as the person signed in sees it (GET /api/engine/procedures/{reference}) */
 export type ReviewRequest = {
@@ -36,6 +41,10 @@ export type ReviewRequest = {
   notes: Note[]
   /** The notes the previous reviewer sent with their approval */
   notesFrom: NoteFrom[]
+  /** The decision, while the request is returned or rejected */
+  decision: Decision | null
+  /** Whether this person made the request */
+  mine: boolean
 }
 
 export type Taken = { task: string; reference: string }
@@ -49,7 +58,11 @@ export type NoteFrom = Note & { author: string }
 /** Where the approved request went; no next step when it was the last */
 export type Approved = { task: string; reference: string; nextStep: string | null; handledBy: string | null; nextTask: string | null }
 
-export type Undone = { task: string; reference: string; step: string }
+/** The task that was returned or rejected */
+export type Ended = { task: string; reference: string }
+
+/** The step open again, and the decision that was undone: approved, returned or rejected */
+export type Undone = { task: string; reference: string; step: string; decision: string }
 
 /**
  * A decision the server took, or the reason it refused it: someone acted first, or the next step
@@ -80,9 +93,9 @@ export async function openRequest(reference: string): Promise<Opened> {
 /** The address of a file of the request, to open in the browser */
 export const fileUrl = (reference: string, file: string) => `${PROCEDURES}/${encodeURIComponent(reference)}/files/${file}`
 
-async function decide<T>(task: string, decision: 'take' | 'release' | 'approve' | 'undo'): Promise<Outcome<T>> {
+async function decide<T>(task: string, decision: 'take' | 'release' | 'approve' | 'return' | 'reject' | 'undo', body?: unknown): Promise<Outcome<T>> {
   const url = `/api/engine/tasks/${task}/${decision}`
-  const response = await send('POST', url)
+  const response = await send('POST', url, body)
   if (response.status === 409) return { done: false, reason: ((await response.json()) as { detail: string }).detail }
   if (!response.ok) throw unexpected('POST', url, response)
   return { done: true, result: (await response.json()) as T }
@@ -96,7 +109,13 @@ export const release = (task: string) => decide<Taken>(task, 'release')
 
 export const approve = (task: string) => decide<Approved>(task, 'approve')
 
-export const undoApproval = (task: string) => decide<Undone>(task, 'undo')
+/** «Devolver para correção», for reasons of the step (UC18) */
+export const returnToRequester = (task: string, why: { reasons: string[]; message: string }) => decide<Ended>(task, 'return', why)
+
+/** «Rejeitar o pedido», for reasons of the step (UC18) */
+export const reject = (task: string, why: { reasons: string[]; message: string }) => decide<Ended>(task, 'reject', why)
+
+export const undoDecision = (task: string) => decide<Undone>(task, 'undo')
 
 const noteUrl = (task: string, field: string) => `/api/engine/tasks/${task}/notes/${encodeURIComponent(field)}`
 

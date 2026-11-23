@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { approve, fileField, fileUrl, openRequest, release, type Note, type Opened, type ReviewRequest } from '../api/engine'
+import {
+  approve,
+  fileField,
+  fileUrl,
+  openRequest,
+  reject,
+  release,
+  returnToRequester,
+  type Decision,
+  type Note,
+  type Outcome,
+  type Opened,
+  type ReviewRequest,
+} from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { Flash, type Notice } from '../components/Flash'
@@ -10,7 +23,20 @@ import { ProcedureProgress } from '../components/ProcedureProgress'
 import { cx } from '../lib/cx'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
-import { approvedNotice, approveFailed, dateTime, refusedNotice, releasedNotice, releaseFailed, type ReviewState } from '../review/notices'
+import {
+  approvedNotice,
+  approveFailed,
+  dateTime,
+  refusedNotice,
+  rejectedNotice,
+  rejectFailed,
+  releasedNotice,
+  releaseFailed,
+  returnedNotice,
+  returnFailed,
+  type ReviewState,
+} from '../review/notices'
+import { EndMenus, type EndKind, type Why } from '../review/EndMenus'
 import { FieldNotes } from '../review/FieldNotes'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
@@ -22,7 +48,8 @@ const secondarySmall =
 /**
  * E08 · Rever pedido (UC17): the request, its files, its path and its history, and, for a
  * candidate of the current step, the decision. The expenses and their total are UC15 (Dinis);
- * the notes are UC19, and returning and rejecting UC18, so those two buttons wait for it.
+ * the notes are UC19, and returning and rejecting UC18. The requester sees here why it was
+ * returned or rejected; correcting it is UC20 (Dinis).
  */
 export function RequestPage() {
   const { reference = '' } = useParams()
@@ -91,38 +118,46 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
       onNotice={onRefused}
     />
   )
-  const [approving, setApproving] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   const current = r.path.findIndex((s) => s.id === r.currentStep)
   const next = current >= 0 ? r.path[current + 1] : undefined
-  const closed = r.status === 'closed'
 
   // «Libertar a tarefa»: back to every candidate, and to the inbox
   async function releaseIt(task: string) {
-    setApproving(true)
+    setBusy(true)
     try {
       await release(task)
       const state: ReviewState = { notice: releasedNotice }
       navigate(paths.inbox, { state })
     } catch {
-      setApproving(false)
+      setBusy(false)
       onRefused(releaseFailed)
     }
   }
 
-  async function approveIt(task: string) {
-    setApproving(true)
+  // Decides, and goes to the inbox with the notice and «Desfazer». If someone acted first, with who.
+  async function decide<T>(task: string, deciding: Promise<Outcome<T>>, notice: (result: T) => Notice, failed: Notice) {
+    setBusy(true)
     try {
-      const outcome = await approve(task)
+      const outcome = await deciding
       const state: ReviewState = outcome.done
-        ? { notice: approvedNotice(r.reference, outcome.result.nextStep, outcome.result.handledBy), undo: { task, reference: r.reference } }
-        : // Someone acted first: back to the inbox, with who, and no «Desfazer»
-          { notice: refusedNotice(outcome.reason) }
+        ? { notice: notice(outcome.result), undo: { task, reference: r.reference } }
+        : { notice: refusedNotice(outcome.reason) }
       navigate(paths.inbox, { state })
     } catch {
-      setApproving(false)
-      onRefused(approveFailed)
+      setBusy(false)
+      onRefused(failed)
     }
+  }
+
+  const approveIt = (task: string) => decide(task, approve(task), (to) => approvedNotice(r.reference, to.nextStep, to.handledBy), approveFailed)
+
+  function endIt(task: string, kind: EndKind, why: Why) {
+    const requester = [r.requester.name, r.requester.jobTitle].filter(Boolean).join(', ')
+    return kind === 'devolver'
+      ? decide(task, returnToRequester(task, why), () => returnedNotice(r.reference, requester, why.reasons), returnFailed)
+      : decide(task, reject(task, why), () => rejectedNotice(r.reference, why.reasons), rejectFailed)
   }
 
   return (
@@ -147,8 +182,10 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
       </header>
 
       <section aria-label="Passos do procedimento" className={cx(card, 'px-6 pt-5 pb-4')}>
-        <ProcedureProgress steps={r.path.map((s) => ({ label: s.name, meta: s.handledBy }))} current={Math.max(0, current)} estado={closed ? 'fechado' : ''} />
+        <ProcedureProgress steps={r.path.map((s) => ({ label: s.name, meta: s.handledBy }))} current={Math.max(0, current)} estado={progress[r.status] ?? ''} />
       </section>
+
+      {r.mine && r.decision && <WhyItEnded status={r.status} decision={r.decision} notes={r.notesFrom.length} />}
 
       <div className="flex flex-wrap items-start gap-7">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
@@ -247,7 +284,10 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                   .map((h, i) => (
                     <li key={i} className="flex flex-wrap gap-x-4 gap-y-0.5 border-t border-line py-2.5 text-[14px] leading-[21px]">
                       <span className="flex-[0_0_140px] text-ink-3 tabular-nums">{dateTime(h.at)}</span>
-                      <span className="flex-[1_1_260px]">{h.text}</span>
+                      <span className="flex flex-[1_1_260px] flex-col gap-0.5">
+                        <span>{h.text}</span>
+                        {h.message && <span className="text-ink-2 [overflow-wrap:anywhere]">«{h.message}»</span>}
+                      </span>
                     </li>
                   ))}
               </ol>
@@ -265,22 +305,23 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                 <Icon name="message" size={16} className="mt-px text-accent-ink" />
                 <span>{notesSummary(Object.keys(notes).length, r.requester.name)}</span>
               </p>
-              {/* UC18: returning and rejecting arrive with it */}
               <div className="flex flex-col gap-2.5" role="group" aria-label="Decisão">
-                <Button variant="secondary" icon="reset" className="w-full" disabled>
-                  Devolver para correção
-                </Button>
-                <Button variant="secondary" icon="x" className="w-full" disabled>
-                  Rejeitar o pedido
-                </Button>
-                <Button id="btn-aprovar" size="l" icon="check" iconSize={20} disabled={approving} onClick={() => approveIt(r.task as string)}>
+                <EndMenus
+                  requester={r.requester}
+                  returnReasons={r.path[current]?.returnReasons ?? []}
+                  rejectReasons={r.path[current]?.rejectReasons ?? []}
+                  notes={Object.keys(notes).length}
+                  busy={busy}
+                  onDecide={(kind, why) => endIt(r.task as string, kind, why)}
+                />
+                <Button id="btn-aprovar" size="l" icon="check" iconSize={20} disabled={busy} onClick={() => approveIt(r.task as string)}>
                   Aprovar
                 </Button>
               </div>
               <p className="-mt-1.5 mb-0 text-center text-label-sm leading-[19px] text-ink-2">
                 {next ? `Segue para o passo «${next.name}», com ${next.handledBy}.` : 'Fecha o procedimento.'}
               </p>
-              <Button variant="secondary" icon="reset" className="w-full" disabled={approving} onClick={() => releaseIt(r.task as string)}>
+              <Button variant="secondary" icon="reset" className="w-full" disabled={busy} onClick={() => releaseIt(r.task as string)}>
                 Libertar a tarefa
               </Button>
             </section>
@@ -298,9 +339,36 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
   )
 }
 
+// The progress line's name for each status of the request; none while it goes on
+const progress: Record<string, 'devolvido' | 'rejeitado' | 'fechado' | undefined> = { returned: 'devolvido', rejected: 'rejeitado', closed: 'fechado' }
+
+// For the requester: who returned or rejected the request, why, and what they wrote (UC18 #8)
+function WhyItEnded({ status, decision, notes }: { status: string; decision: Decision; notes: number }) {
+  const rejected = status === 'rejected'
+  const told = [decision.message && `«${decision.message}»`, notes > 0 && 'As notas aparecem junto dos campos.'].filter(Boolean).join(' ')
+  return (
+    <section
+      aria-labelledby="titulo-motivo"
+      className={cx('edge flex flex-col gap-2.5 rounded-md px-5.5 py-4.5', rejected ? 'bg-error-soft' : 'bg-warning-soft')}
+    >
+      <h2 id="titulo-motivo" className="m-0 text-[17px] leading-6 font-semibold">
+        {rejected ? 'Rejeitado por' : 'Devolvido para correção por'} {decision.by} · {decision.reasons.length === 1 ? 'motivo:' : 'motivos:'}
+      </h2>
+      <ul className="m-0 flex flex-col gap-0.5 pl-5.5 text-[15px] leading-[23px] font-semibold">
+        {decision.reasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+      {told && <p className="m-0 text-[15px] leading-[23px] [overflow-wrap:anywhere]">{told}</p>}
+    </section>
+  )
+}
+
 // For whoever looks without deciding: who has the request in review, or where it is
 function stateText(r: ReviewRequest, current: number) {
   if (r.status === 'closed') return 'Concluído.'
+  if (r.decision && r.status === 'returned') return `Devolvido para correção por ${r.decision.by}.`
+  if (r.decision && r.status === 'rejected') return `Rejeitado por ${r.decision.by}: ${r.decision.reasons.join('; ')}.`
   if (r.reviewer) return `Em revisão por ${r.reviewer}.`
   return current >= 0 ? `No passo «${r.path[current].name}», com ${r.path[current].handledBy}.` : '—'
 }

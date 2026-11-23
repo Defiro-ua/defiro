@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approve, deleteNote, fileField, fileUrl, listInbox, openRequest, release, saveNote, take, undoApproval } from './engine'
+import { approve, deleteNote, fileField, fileUrl, listInbox, openRequest, reject, release, returnToRequester, saveNote, take, undoDecision } from './engine'
 
 function answer(status: number, body?: unknown) {
   const fetch = vi.fn().mockResolvedValue(new Response(body === undefined ? null : JSON.stringify(body), { status }))
@@ -64,16 +64,32 @@ describe('the Engine API', () => {
     await expect(approve('t1')).resolves.toEqual({ done: false, reason: 'Este pedido já foi tratado por Segunda Chefia, Chefe de Divisão.' })
   })
 
-  it('undoes an approval, or gives why it no longer can', async () => {
+  it('undoes a decision, or gives why it no longer can', async () => {
     const fetch = answer(200, { task: 't1', reference: 'AC-2026-0147', step: 'Validação da chefia' })
-    await expect(undoApproval('t1')).resolves.toMatchObject({ done: true })
+    await expect(undoDecision('t1')).resolves.toMatchObject({ done: true })
     expect(fetch.mock.calls[0][0]).toBe('/api/engine/tasks/t1/undo')
 
     answer(409, { detail: 'Já não é possível desfazer: o pedido já foi tratado no passo «Verificação financeira».' })
-    await expect(undoApproval('t1')).resolves.toEqual({
+    await expect(undoDecision('t1')).resolves.toEqual({
       done: false,
       reason: 'Já não é possível desfazer: o pedido já foi tratado no passo «Verificação financeira».',
     })
+  })
+
+  it.each([
+    ['return', returnToRequester],
+    ['reject', reject],
+  ])('sends the reasons and the message to %s', async (decision, send) => {
+    const why = { reasons: ['Preenchido incorretamente'], message: 'Corrija a data de regresso e junte o certificado, por favor.' }
+    const fetch = answer(200, { task: 't1', reference: 'AC-2026-0147' })
+
+    await expect(send('t1', why)).resolves.toEqual({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe(`/api/engine/tasks/t1/${decision}`)
+    expect(init).toMatchObject({ method: 'POST', body: JSON.stringify(why) })
+
+    answer(422)
+    await expect(send('t1', why)).rejects.toThrow('answered 422')
   })
 
   it('takes a task, or gives who took it first', async () => {

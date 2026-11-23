@@ -17,7 +17,9 @@ vi.mock('../api/engine', async (original) => ({
   release: vi.fn(),
   saveNote: vi.fn(),
   deleteNote: vi.fn(),
-  undoApproval: vi.fn(),
+  undoDecision: vi.fn(),
+  returnToRequester: vi.fn(),
+  reject: vi.fn(),
 }))
 
 // The mockup's people and request AC-2026-0147
@@ -35,10 +37,22 @@ const request: ReviewRequest = {
   status: 'in_progress',
   currentStep: 's2',
   path: [
-    { id: 's1', name: 'Pedido', handledBy: 'Todos os trabalhadores' },
-    { id: 's2', name: 'Validação da chefia', handledBy: 'Chefias da unidade do requerente' },
-    { id: 's3', name: 'Verificação financeira', handledBy: 'Divisão Financeira' },
-    { id: 's4', name: 'Validação final', handledBy: 'RH · Formação' },
+    { id: 's1', name: 'Pedido', handledBy: 'Todos os trabalhadores', returnReasons: [], rejectReasons: [] },
+    {
+      id: 's2',
+      name: 'Validação da chefia',
+      handledBy: 'Chefias da unidade do requerente',
+      returnReasons: ['Preenchido incorretamente', 'Falta documento comprovativo'],
+      rejectReasons: ['Deslocação não autorizada', 'Fora do prazo legal'],
+    },
+    {
+      id: 's3',
+      name: 'Verificação financeira',
+      handledBy: 'Divisão Financeira',
+      returnReasons: ['Preenchido incorretamente', 'Falta documento comprovativo'],
+      rejectReasons: ['Despesa não elegível'],
+    },
+    { id: 's4', name: 'Validação final', handledBy: 'RH · Formação', returnReasons: [], rejectReasons: ['Fora do prazo legal'] },
   ],
   version: 1,
   requester: { name: 'Ana Ferreira', jobTitle: 'Técnica Superior', unit: 'Divisão de Obras Municipais', manager: 'Rui Matos' },
@@ -47,11 +61,13 @@ const request: ReviewRequest = {
     { field: 'regresso', label: 'Regresso', value: '10/11/2026 19:40', changed: false, previous: null },
   ],
   files: [{ id: 'f1', filename: 'bilhete_comboio.pdf', version: 1 }],
-  history: [{ at: '2026-11-18T16:02:00Z', text: 'Ana Ferreira, Técnica Superior, submeteu o pedido' }],
+  history: [{ at: '2026-11-18T16:02:00Z', text: 'Ana Ferreira, Técnica Superior, submeteu o pedido', message: null }],
   task: 't1',
   reviewer: 'Rui Matos, Chefe de Divisão',
   notes: [],
   notesFrom: [],
+  decision: null,
+  mine: false,
 }
 
 const waiting: api.InboxItem = {
@@ -162,13 +178,16 @@ describe('the inbox (until UC27)', () => {
 
   it('after approving, «Desfazer» goes back to the request with «Aprovação desfeita»', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
-    vi.mocked(api.undoApproval).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147', step: 'Validação da chefia' } })
+    vi.mocked(api.undoDecision).mockResolvedValue({
+      done: true,
+      result: { task: 't1', reference: 'AC-2026-0147', step: 'Validação da chefia', decision: 'approved' },
+    })
     vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
     openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
 
     await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
 
-    expect(api.undoApproval).toHaveBeenCalledWith('t1')
+    expect(api.undoDecision).toHaveBeenCalledWith('t1')
     expect(await screen.findByRole('heading', { level: 1, name: 'Ajudas de custo · Ana Ferreira' })).toBeInTheDocument()
     expect(await screen.findByText('Aprovação desfeita')).toBeInTheDocument()
   })
@@ -183,20 +202,20 @@ describe('the inbox (until UC27)', () => {
 
   it('undoes once, however many times «Desfazer» is clicked', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
-    vi.mocked(api.undoApproval).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.undoDecision).mockReturnValue(new Promise(() => {}))
     openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
 
     const undo = await screen.findByRole('button', { name: 'Desfazer' })
     await userEvent.click(undo)
     await userEvent.click(undo)
 
-    expect(api.undoApproval).toHaveBeenCalledOnce()
+    expect(api.undoDecision).toHaveBeenCalledOnce()
   })
 
   it('when it is too late to undo, says why and offers «Desfazer» no more', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
     const reason = 'Já não é possível desfazer: o pedido já foi tratado no passo «Verificação financeira».'
-    vi.mocked(api.undoApproval).mockResolvedValue({ done: false, reason })
+    vi.mocked(api.undoDecision).mockResolvedValue({ done: false, reason })
     openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
 
     await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
@@ -207,7 +226,7 @@ describe('the inbox (until UC27)', () => {
 
   it('says so when undoing fails', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
-    vi.mocked(api.undoApproval).mockRejectedValue(new Error('POST answered 500'))
+    vi.mocked(api.undoDecision).mockRejectedValue(new Error('POST answered 500'))
     openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido aprovado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
 
     await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
@@ -382,16 +401,14 @@ describe('«Rever pedido» (UC17)', () => {
     expect(screen.getAllByText('Novo na versão 2')).toHaveLength(1)
   })
 
-  it('ends the decision with «Aprovar», with return and reject waiting for UC18', async () => {
+  it('ends the decision with «Aprovar», after the two that end the review', async () => {
     vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
     openAt('/pedidos/AC-2026-0147')
 
     const decision = await screen.findByRole('group', { name: 'Decisão' })
     const buttons = within(decision).getAllByRole('button')
     expect(buttons.map((b) => b.textContent)).toEqual(['Devolver para correção', 'Rejeitar o pedido', 'Aprovar'])
-    expect(buttons[0]).toBeDisabled()
-    expect(buttons[1]).toBeDisabled()
-    expect(buttons[2]).toBeEnabled()
+    buttons.forEach((b) => expect(b).toBeEnabled())
     expect(screen.getByText('Segue para o passo «Verificação financeira», com Divisão Financeira.')).toBeInTheDocument()
   })
 
@@ -481,5 +498,241 @@ describe('«Rever pedido» (UC17)', () => {
     vi.mocked(api.openRequest).mockRejectedValue(new Error('GET answered 500'))
     openAt('/pedidos/AC-2026-0147')
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível abrir o pedido')
+  })
+})
+
+describe('returning and rejecting (UC18)', () => {
+  const message = 'Corrija a data de regresso e junte o certificado, por favor.'
+  const note = { field: 'regresso', label: 'Regresso', text: 'Indicou 10/11/2026; o certificado de presença diz 09/11/2026.' }
+
+  // The button that opens the reasons; the one that confirms has the same name
+  const opener = (name: string) => screen.findByRole('button', { name, expanded: false })
+  const menu = (name: string) => within(screen.getByRole('region', { name }))
+
+  async function open(name: string, opened: Partial<ReviewRequest> = {}) {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...opened } })
+    openAt('/pedidos/AC-2026-0147')
+    await userEvent.click(await opener(name))
+    return menu(name)
+  }
+
+  const reasons = (m: ReturnType<typeof menu>) => m.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).value)
+
+  it('each button opens its own reasons, one menu at a time', async () => {
+    const back = await open('Devolver para correção')
+    expect(back.getByRole('group', { name: /^Porque devolve o pedido\?/ })).toBeInTheDocument()
+    expect(reasons(back)).toEqual(['Preenchido incorretamente', 'Falta documento comprovativo'])
+
+    await userEvent.click(await opener('Rejeitar o pedido'))
+    expect(screen.queryByRole('region', { name: 'Devolver para correção' })).not.toBeInTheDocument()
+    expect(menu('Rejeitar o pedido').getByRole('group', { name: /^Porque rejeita o pedido\?/ })).toBeInTheDocument()
+    expect(reasons(menu('Rejeitar o pedido'))).toEqual(['Deslocação não autorizada', 'Fora do prazo legal'])
+  })
+
+  it('keeps «Rejeitar o pedido» even on a step with no reasons to reject', async () => {
+    const path = request.path.map((s) => (s.id === 's2' ? { ...s, rejectReasons: [] } : s))
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, path } })
+    openAt('/pedidos/AC-2026-0147')
+
+    expect(await opener('Rejeitar o pedido')).toBeEnabled()
+  })
+
+  it.each(['Devolver para correção', 'Rejeitar o pedido'])('«%s» asks for at least one reason', async (name) => {
+    const m = await open(name)
+    await userEvent.click(m.getByRole('button', { name }))
+
+    expect(m.getByText('Escolha pelo menos um motivo.')).toBeInTheDocument()
+    expect(api.returnToRequester).not.toHaveBeenCalled()
+    expect(api.reject).not.toHaveBeenCalled()
+  })
+
+  it('a return with no note needs a message', async () => {
+    const m = await open('Devolver para correção')
+    expect(m.getByText('Obrigatória: não deixou notas nos campos, por isso diga aqui o que tem de ser corrigido.')).toBeInTheDocument()
+    await userEvent.click(m.getByRole('checkbox', { name: 'Preenchido incorretamente' }))
+    await userEvent.type(m.getByRole('textbox'), '   ')
+    await userEvent.click(m.getByRole('button', { name: 'Devolver para correção' }))
+
+    expect(m.getByRole('alert')).toHaveTextContent('Diga a Ana o que tem de corrigir: escreva a mensagem ou deixe uma nota no campo.')
+    expect(api.returnToRequester).not.toHaveBeenCalled()
+  })
+
+  it('with a note, the message may be left out, and the note goes too', async () => {
+    vi.mocked(api.returnToRequester).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    const m = await open('Devolver para correção', { notes: [note] })
+    expect(m.getByText('As notas que deixou nos campos já explicam o que corrigir. Pode acrescentar uma mensagem.')).toBeInTheDocument()
+    expect(m.getByText('Vai também a nota que deixou num campo.')).toBeInTheDocument()
+    await userEvent.click(m.getByRole('checkbox', { name: 'Preenchido incorretamente' }))
+    await userEvent.click(m.getByRole('button', { name: 'Devolver para correção' }))
+
+    expect(api.returnToRequester).toHaveBeenCalledWith('t1', { reasons: ['Preenchido incorretamente'], message: '' })
+    expect(await screen.findByText('Pedido devolvido para correção')).toBeInTheDocument()
+  })
+
+  it('returns for the reasons in the order of the step, and shows them in the notice with «Desfazer»', async () => {
+    vi.mocked(api.returnToRequester).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    const m = await open('Devolver para correção')
+    await userEvent.click(m.getByRole('checkbox', { name: 'Falta documento comprovativo' }))
+    await userEvent.click(m.getByRole('checkbox', { name: 'Preenchido incorretamente' }))
+    await userEvent.type(m.getByRole('textbox', { name: /^Mensagem para Ana Ferreira, Técnica Superior/ }), message)
+    await userEvent.click(m.getByRole('button', { name: 'Devolver para correção' }))
+
+    expect(api.returnToRequester).toHaveBeenCalledWith('t1', { reasons: ['Preenchido incorretamente', 'Falta documento comprovativo'], message })
+    expect(await screen.findByText('Pedido devolvido para correção')).toBeInTheDocument()
+    expect(screen.getByText('Motivos: Preenchido incorretamente; Falta documento comprovativo.')).not.toHaveClass('sr-only')
+    expect(screen.getByRole('button', { name: 'Desfazer' })).toBeInTheDocument()
+  })
+
+  it('a reason can be unticked', async () => {
+    const m = await open('Devolver para correção')
+    const box = m.getByRole('checkbox', { name: 'Preenchido incorretamente' })
+    await userEvent.click(box)
+    await userEvent.click(box)
+    await userEvent.click(m.getByRole('button', { name: 'Devolver para correção' }))
+
+    expect(m.getByText('Escolha pelo menos um motivo.')).toBeInTheDocument()
+  })
+
+  it('a rejection always needs a message, even with a note, and its confirm button is red', async () => {
+    const m = await open('Rejeitar o pedido', { notes: [note] })
+    expect(m.getByText('Explique a razão da rejeição.')).toBeInTheDocument()
+    expect(m.queryByText('Vai também a nota que deixou num campo.')).not.toBeInTheDocument()
+    await userEvent.click(m.getByRole('checkbox', { name: 'Fora do prazo legal' }))
+    const confirm = m.getByRole('button', { name: 'Rejeitar o pedido' })
+    expect(confirm).toHaveClass('bg-error')
+    await userEvent.click(confirm)
+
+    expect(m.getByRole('alert')).toHaveTextContent('Diga a Ana a razão da rejeição: escreva a mensagem.')
+    expect(api.reject).not.toHaveBeenCalled()
+  })
+
+  it('rejects, with one reason in the notice', async () => {
+    vi.mocked(api.reject).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147' } })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    const m = await open('Rejeitar o pedido')
+    await userEvent.click(m.getByRole('checkbox', { name: 'Fora do prazo legal' }))
+    await userEvent.type(m.getByRole('textbox'), 'Mensagem de rejeição')
+    await userEvent.click(m.getByRole('button', { name: 'Rejeitar o pedido' }))
+
+    expect(api.reject).toHaveBeenCalledWith('t1', { reasons: ['Fora do prazo legal'], message: 'Mensagem de rejeição' })
+    expect(await screen.findByText('Pedido rejeitado')).toBeInTheDocument()
+    expect(screen.getByText('Motivo: Fora do prazo legal.')).toBeInTheDocument()
+  })
+
+  it('counts the message and stops at 1000 characters', async () => {
+    const m = await open('Devolver para correção')
+    const box = m.getByRole('textbox')
+    expect(box).toHaveAttribute('maxlength', '1000')
+    await userEvent.type(box, message)
+
+    expect(m.getByText(`${message.length} de 1000 caracteres`)).toBeInTheDocument()
+  })
+
+  it.each(['Cancelar', 'Escape'])('closes the menu with %s, deciding nothing', async (how) => {
+    const m = await open('Devolver para correção')
+    await (how === 'Cancelar' ? userEvent.click(m.getByRole('button', { name: how })) : userEvent.type(m.getByRole('textbox'), '{Escape}'))
+
+    expect(screen.queryByRole('region', { name: 'Devolver para correção' })).not.toBeInTheDocument()
+    expect(api.returnToRequester).not.toHaveBeenCalled()
+  })
+
+  it('when someone decided first, goes back to the inbox saying who, with no «Desfazer»', async () => {
+    const reason = 'Este pedido já foi tratado por Segunda Chefia, Chefe de Divisão.'
+    vi.mocked(api.reject).mockResolvedValue({ done: false, reason })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    const m = await open('Rejeitar o pedido')
+    await userEvent.click(m.getByRole('checkbox', { name: 'Fora do prazo legal' }))
+    await userEvent.type(m.getByRole('textbox'), 'Mensagem de rejeição')
+    await userEvent.click(m.getByRole('button', { name: 'Rejeitar o pedido' }))
+
+    expect(await screen.findByText(reason)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desfazer' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['Devolver para correção', 'Preenchido incorretamente', 'Não foi possível devolver o pedido'],
+    ['Rejeitar o pedido', 'Fora do prazo legal', 'Não foi possível rejeitar o pedido'],
+  ])('says so when «%s» fails, keeping what was written', async (name, reason, failed) => {
+    vi.mocked(api.returnToRequester).mockRejectedValue(new Error('POST answered 500'))
+    vi.mocked(api.reject).mockRejectedValue(new Error('POST answered 500'))
+    const m = await open(name)
+    await userEvent.click(m.getByRole('checkbox', { name: reason }))
+    await userEvent.type(m.getByRole('textbox'), message)
+    await userEvent.click(m.getByRole('button', { name }))
+
+    expect(await screen.findByText(failed)).toBeInTheDocument()
+    expect(m.getByRole('textbox')).toHaveValue(message)
+    expect(m.getByRole('button', { name })).toBeEnabled()
+  })
+
+  it.each([
+    ['returned', 'Devolução desfeita'],
+    ['rejected', 'Rejeição desfeita'],
+  ])('undoing a %s request says «%s»', async (decision, undone) => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.undoDecision).mockResolvedValue({ done: true, result: { task: 't1', reference: 'AC-2026-0147', step: 'Validação da chefia', decision } })
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    openAt('/caixa-de-tarefas', { notice: { titulo: 'Pedido rejeitado' }, undo: { task: 't1', reference: 'AC-2026-0147' } })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+
+    expect(await screen.findByText(undone)).toBeInTheDocument()
+  })
+
+  const by = 'Rui Matos, Chefe de Divisão'
+  const returned = { status: 'returned', currentStep: 's1', task: null, reviewer: null, decision: { by, reasons: ['Preenchido incorretamente'], message } }
+  const rejected = { status: 'rejected', task: null, reviewer: null, decision: { by, reasons: ['Deslocação não autorizada', 'Fora do prazo legal'], message } }
+
+  it('shows the requester why the request was returned, and that the notes are next to the fields', async () => {
+    const notesFrom = [{ ...note, author: by }]
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...returned, notesFrom, mine: true } })
+    openAt('/pedidos/AC-2026-0147')
+
+    const why = within(await screen.findByRole('region', { name: `Devolvido para correção por ${by} · motivo:` }))
+    expect(why.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Preenchido incorretamente'])
+    expect(why.getByText(`«${message}» As notas aparecem junto dos campos.`)).toBeInTheDocument()
+    expect(screen.getByText(`Devolvido para correção por ${by}.`)).toBeInTheDocument()
+    expect(screen.getByText('Passo 1 de 4: Pedido, a corrigir pelo requerente.')).toBeInTheDocument()
+  })
+
+  it('shows the requester why the request was rejected', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...rejected, mine: true } })
+    openAt('/pedidos/AC-2026-0147')
+
+    const why = within(await screen.findByRole('region', { name: `Rejeitado por ${by} · motivos:` }))
+    expect(why.getAllByRole('listitem')).toHaveLength(2)
+    expect(why.getByText(`«${message}»`)).toBeInTheDocument()
+    expect(screen.getByText(`Rejeitado por ${by}: Deslocação não autorizada; Fora do prazo legal.`)).toBeInTheDocument()
+    expect(screen.getByText('Passo 2 de 4: Validação da chefia, rejeitado.')).toBeInTheDocument()
+  })
+
+  it('a return with no message and no notes left shows the reasons alone', async () => {
+    const decision = { ...returned.decision, message: null }
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...returned, decision, mine: true } })
+    openAt('/pedidos/AC-2026-0147')
+
+    const why = within(await screen.findByRole('region', { name: /^Devolvido para correção/ }))
+    expect(why.queryByRole('paragraph')).not.toBeInTheDocument()
+  })
+
+  it('the others see who decided, but not that section', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...returned } })
+    openAt('/pedidos/AC-2026-0147')
+
+    expect(await screen.findByText(`Devolvido para correção por ${by}.`)).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /· motivo/ })).not.toBeInTheDocument()
+  })
+
+  it('shows the message in the history, under its entry', async () => {
+    const text = `${by}, devolveu para correção: Preenchido incorretamente com 1 nota`
+    const history = [...request.history, { at: '2026-11-22T18:32:00Z', text, message }]
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request: { ...request, ...returned, history } })
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver histórico' }))
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(screen.getByText(`«${message}»`)).toBeInTheDocument()
   })
 })
