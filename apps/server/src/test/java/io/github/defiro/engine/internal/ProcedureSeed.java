@@ -128,6 +128,8 @@ public class ProcedureSeed {
                 .map(file -> attach(request, file.getKey(), file.getValue()))
                 .toList();
         tasks.openOf(request.procedure()).forEach(open -> tasks.withdraw(open.id()));
+        // A returned request goes on again (UC18)
+        procedures.reopen(request.procedure());
         procedures.moveTo(request.procedure(), firstReview.id());
         UUID task = tasks.open(request.procedure(), firstReview);
         Map<String, Object> details = json.convertValue(

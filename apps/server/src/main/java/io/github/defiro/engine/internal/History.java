@@ -11,10 +11,24 @@ final class History {
 
     private History() {}
 
-    record Line(OffsetDateTime at, String text) {}
+    /** An entry, with the reviewer's message when it returned or rejected the request, or null. */
+    record Line(OffsetDateTime at, String text, String message) {}
 
     static Line of(AuditLog.Entry entry) {
-        return new Line(entry.at(), text(entry));
+        return new Line(entry.at(), text(entry), (String) entry.details().get(Decisions.MESSAGE));
+    }
+
+    // «One reason; another», as in the prototype
+    private static String reasons(Map<String, Object> details) {
+        return String.join("; ", Decisions.reasonsOf(details));
+    }
+
+    // An entry from before UC18 has no decision: only approvals could be undone
+    private static String undone(Object decision) {
+        if (Decisions.RETURNED.equals(decision)) {
+            return "a devolução";
+        }
+        return Decisions.REJECTED.equals(decision) ? "a rejeição" : "a aprovação";
     }
 
     // «com 1 nota», «com 2 notas», as in the prototype; nothing with none
@@ -33,9 +47,12 @@ final class History {
             case "submitted" -> who + ", submeteu o pedido";
             case Resubmission.ACTION -> who + ", corrigiu e reenviou o pedido (versão " + details.get("version") + ")";
             case Decisions.APPROVED -> who + ", aprovou o passo «" + details.get("step") + "»" + withNotes(details);
+            case Decisions.RETURNED -> who + ", devolveu para correção: " + reasons(details) + withNotes(details);
+            case Decisions.REJECTED -> who + ", rejeitou o pedido: " + reasons(details) + withNotes(details);
             case Decisions.TAKEN -> who + ", aceitou a tarefa «" + details.get("step") + "»";
             case Decisions.RELEASED -> who + ", libertou a tarefa «" + details.get("step") + "»";
-            case Decisions.UNDONE -> who + ", desfez a aprovação do passo «" + details.get("step") + "»";
+            case Decisions.UNDONE ->
+                who + ", desfez " + undone(details.get(Decisions.DECISION)) + " do passo «" + details.get("step") + "»";
             case Decisions.MOVED -> "Passou ao passo «" + details.get("step") + "», com " + details.get("handledBy");
             default -> who + ", " + entry.action();
         };

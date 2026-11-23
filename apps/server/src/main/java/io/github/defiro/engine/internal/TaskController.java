@@ -1,6 +1,7 @@
 package io.github.defiro.engine.internal;
 
 import io.github.defiro.identity.Person;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -10,6 +11,7 @@ import org.springframework.security.oauth2.core.ClaimAccessor;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -44,9 +46,30 @@ class TaskController {
         return ResponseEntity.of(decisions.approve(id, Person.of(user)));
     }
 
+    /** Why the reviewer returns or rejects the request: reasons of the step, and what they write. */
+    record Why(List<String> reasons, String message) {}
+
+    @PostMapping("/return")
+    ResponseEntity<Decisions.Ended> returnToRequester(
+            @PathVariable UUID id, @RequestBody Why why, @AuthenticationPrincipal ClaimAccessor user) {
+        return ResponseEntity.of(decisions.returnToRequester(id, why.reasons(), why.message(), Person.of(user)));
+    }
+
+    @PostMapping("/reject")
+    ResponseEntity<Decisions.Ended> reject(
+            @PathVariable UUID id, @RequestBody Why why, @AuthenticationPrincipal ClaimAccessor user) {
+        return ResponseEntity.of(decisions.reject(id, why.reasons(), why.message(), Person.of(user)));
+    }
+
     @PostMapping("/undo")
     ResponseEntity<Decisions.Undone> undo(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
         return ResponseEntity.of(decisions.undo(id, Person.of(user)));
+    }
+
+    /** 422: the reasons or the message. The web app shows its own texts. */
+    @ExceptionHandler
+    ProblemDetail invalid(InvalidDecisionException invalid) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, invalid.getMessage());
     }
 
     /** 409, with the text the reviewer is shown. */

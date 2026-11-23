@@ -84,6 +84,38 @@ class Procedures {
                 .update();
     }
 
+    /** The request went back to the requester, at the request's step, to be corrected (UC20). */
+    void returnTo(UUID procedure, String step) {
+        jdbc.sql("update engine.procedure set current_step_id = :step, status = :returned where id = :id")
+                .param("step", step)
+                .param("returned", Decisions.RETURNED)
+                .param("id", procedure)
+                .update();
+    }
+
+    /** The procedure ended at its current step, rejected. */
+    void reject(UUID procedure) {
+        jdbc.sql("update engine.procedure set status = :rejected, closed_at = now() where id = :id")
+                .param("rejected", Decisions.REJECTED)
+                .param("id", procedure)
+                .update();
+    }
+
+    /**
+     * The procedure goes on again, after the return or rejection of this task was undone. Gives false,
+     * and changes nothing, if it is no longer as that decision left it: the requester resubmitted it,
+     * even if it was decided again since. As in Tasks, one conditional statement.
+     */
+    boolean takeBack(UUID task, String decision) {
+        return jdbc.sql("""
+                                update engine.procedure p set status = 'in_progress', closed_at = null
+                                from engine.task t
+                                where t.id = :task and t.decision = :decision
+                                  and p.id = t.procedure_id and p.status = :decision
+                                  and not exists (select 1 from engine.task later
+                                                  where later.procedure_id = p.id and later.decided_at > t.decided_at)""").param("task", task).param("decision", decision).update() == 1;
+    }
+
     /** The request: the document of the procedure's first step. */
     RequestData request(UUID procedure) {
         String data = jdbc.sql(REQUEST_DOCUMENT.formatted(":procedure"))

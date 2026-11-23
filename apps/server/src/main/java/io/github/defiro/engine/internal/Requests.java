@@ -53,7 +53,11 @@ class Requests {
         this.notes = notes;
     }
 
-    record Step(String id, String name, String handledBy) {}
+    /** A step of the path, with the reasons its reviewer may return or reject the request for. */
+    record Step(String id, String name, String handledBy, List<String> returnReasons, List<String> rejectReasons) {}
+
+    /** Who returned or rejected the request, why, and what they wrote to the requester, or null. */
+    record Decision(String by, List<String> reasons, String message) {}
 
     /**
      * An answer of the current version. On a resubmitted request, a changed answer is marked, with
@@ -66,7 +70,8 @@ class Requests {
 
     /**
      * The request as this person sees it. The task is the one they may decide now, as a candidate
-     * of the current step, or null.
+     * of the current step, or null. The decision is there while the request is returned or rejected,
+     * and mine says whether this person made the request.
      */
     record Request(
             String reference,
@@ -82,7 +87,9 @@ class Requests {
             UUID task,
             String reviewer,
             List<Notes.Note> notes,
-            List<Notes.NoteFrom> notesFrom) {}
+            List<Notes.NoteFrom> notesFrom,
+            Decision decision,
+            boolean mine) {}
 
     /** The request, or empty if there is none with this reference. */
     Optional<Request> open(String reference, Person person) {
@@ -111,7 +118,12 @@ class Requests {
                     procedure.status(),
                     procedure.currentStep(),
                     specification.steps().stream()
-                            .map(step -> new Step(step.id(), step.name(), step.handledBy()))
+                            .map(step -> new Step(
+                                    step.id(),
+                                    step.name(),
+                                    step.handledBy(),
+                                    step.returnReasons(),
+                                    step.rejectReasons()))
                             .toList(),
                     resubmissions.isEmpty() ? 1 : resubmissions.getLast().version(),
                     request.requester(),
@@ -122,8 +134,25 @@ class Requests {
                     reviewer,
                     // Their own notes, while they have the task; nobody else sees them (UC19)
                     task == null ? List.of() : notes.draftOf(task),
-                    candidateOf.map(open -> notesFrom(entries, open.id())).orElse(List.of()));
+                    candidateOf.map(open -> notesFrom(entries, open.id())).orElse(List.of()),
+                    decision(procedure, entries),
+                    procedure.requester().equals(person.id()));
         });
+    }
+
+    // A returned or rejected procedure has the status of the decision that left it so
+    private static Decision decision(Procedure procedure, List<AuditLog.Entry> entries) {
+        if (!Decisions.RETURNED.equals(procedure.status()) && !Decisions.REJECTED.equals(procedure.status())) {
+            return null;
+        }
+        return entries.stream()
+                .filter(entry -> procedure.status().equals(entry.action()))
+                .reduce((first, second) -> second)
+                .map(AuditLog.Entry::details)
+                .map(details -> new Decision(
+                        details.get("name") + ", " + details.get("jobTitle"), Decisions.reasonsOf(details), (String)
+                                details.get(Decisions.MESSAGE)))
+                .orElse(null);
     }
 
     // The notes sent with the approval that opened this task: the candidates of its step see them
