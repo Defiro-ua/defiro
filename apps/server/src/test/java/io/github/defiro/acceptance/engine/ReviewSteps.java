@@ -37,9 +37,9 @@ public class ReviewSteps {
     private String taker;
     private Instant actedFrom;
     private Instant actedTo;
-    // The scenario's first approval, which «his approval» means.
-    private String approver;
-    private UUID approval;
+    // The scenario's first decision, which «his approval» and «his decision» mean.
+    private String decider;
+    private UUID decided;
 
     @Autowired
     RequestSteps requests;
@@ -82,23 +82,23 @@ public class ReviewSteps {
         assertThat(response.statusCode()).as(person + " approves").isEqualTo(200);
     }
 
-    @When("he undoes his approval")
-    public void heUndoesHisApproval() {
-        undoesHisApproval(approver);
+    @When("he undoes his approval/decision")
+    public void heUndoesHisDecision() {
+        undoesHisDecision(decider);
     }
 
-    @When("{person} undoes his approval")
-    public void undoesHisApproval(String person) {
-        assertThat(approval).as("an approval to undo").isNotNull();
+    @When("{person} undoes his approval/decision")
+    public void undoesHisDecision(String person) {
+        assertThat(decided).as("a decision to undo").isNotNull();
         actedFrom = Instant.now();
-        response = people.of(person).request().post("/api/engine/tasks/" + approval + "/undo");
+        response = people.of(person).request().post(TASKS + decided + "/undo");
         actedTo = Instant.now();
         access.answered(response);
     }
 
     @Then("the request is back at {string}, in the inbox of {person}")
     public void theRequestIsBackAt(String step, String person) {
-        assertThat(response.statusCode()).as("the approval is undone").isEqualTo(200);
+        assertThat(response.statusCode()).as("the decision is undone").isEqualTo(200);
         theRequestIsAt(step, person);
     }
 
@@ -290,13 +290,7 @@ public class ReviewSteps {
         this.reference = reference;
         actedFrom = Instant.now();
         people.of(person).request().post(TASKS + taskOf(step) + "/take");
-        response = people.of(person).request().post(TASKS + taskOf(step) + "/approve");
-        actedTo = Instant.now();
-        access.answered(response);
-        if (response.statusCode() == 200 && approval == null) {
-            approver = person;
-            approval = taskOf(step);
-        }
+        decided(person, taskOf(step), actedFrom, people.of(person).request().post(TASKS + taskOf(step) + "/approve"));
         if (response.statusCode() == 200 && response.jsonPath().getString("nextStep") != null) {
             tasks.put(
                     response.jsonPath().getString("nextStep"),
@@ -304,7 +298,19 @@ public class ReviewSteps {
         }
     }
 
-    // For the other step classes of the review stories (NoteSteps)
+    // For the other step classes of the review stories (NoteSteps, RejectSteps)
+
+    /** The answer to a person's decision on a task, taken at that time. */
+    void decided(String person, UUID task, Instant from, Response answer) {
+        response = answer;
+        actedFrom = from;
+        actedTo = Instant.now();
+        access.answered(response);
+        if (response.statusCode() == 200 && decided == null) {
+            decider = person;
+            decided = task;
+        }
+    }
 
     /** The person's browser, signed in. */
     io.github.defiro.acceptance.Browser browserOf(String person) {

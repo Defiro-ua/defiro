@@ -80,8 +80,8 @@ public class RequestSteps {
                     rows.get(k).get("step"),
                     rows.get(k).get("handled by"),
                     null,
-                    List.of(),
-                    List.of()));
+                    reasons(rows.get(k).get("reasons to return")),
+                    reasons(rows.get(k).get("reasons to reject"))));
         }
         WorkflowSpecification specification =
                 new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, name, steps, transitions(steps));
@@ -188,6 +188,11 @@ public class RequestSteps {
 
     private static Requester requesterOf(Account account) {
         return new Requester(account.id(), account.name(), account.jobTitle(), account.unit(), account.manager());
+    }
+
+    // «One reason; another», as the history shows them (UC18); UC17 and UC19 need none
+    static List<String> reasons(String cell) {
+        return cell == null || cell.isBlank() ? List.of() : List.of(cell.split("; "));
     }
 
     // A path the Designer accepts: it starts with the request and ends with the final validation.
