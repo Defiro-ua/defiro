@@ -4,10 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.defiro.TestcontainersConfiguration;
-import io.github.defiro.engine.deployment.Deployment;
-import io.github.defiro.engine.deployment.Publication;
+import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,33 +15,38 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * The rules the {@code engine} schema keeps by itself for procedures, the versions of their data,
- * their tasks and their history, whatever code writes to it.
+ * The rules the {@code engine} schema keeps by itself for procedures, their participants, the
+ * versions of their data, their tasks and their history, whatever code writes to it.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class ProcedureTablesIT {
 
-    static final String ISSUER = "https://login.example.org/defiro";
-
-    @Autowired
-    Deployment deployment;
+    static final String SPECIFICATION = """
+            {"schemaVersion": 1, "name": "Ajudas de custo", "steps": [], "transitions": []}""";
 
     @Autowired
     JdbcClient jdbc;
 
-    final UUID draft = UUID.randomUUID();
     final UUID procedure = UUID.randomUUID();
+    final UUID ana = UUID.randomUUID();
+    final UUID rui = UUID.randomUUID();
+    final UUID carla = UUID.randomUUID();
 
-    @BeforeEach
-    void deployAWorkflow() {
-        deployment.deploy(
-                SpecificationVersionsIT.specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+    @Test
+    void aProcedureKeepsItsOwnCopyOfTheSpecification() {
+        startProcedure(procedure);
+
+        assertThat(jdbc.sql("select specification ->> 'name' from engine.procedure where id = :id")
+                        .param("id", procedure)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Ajudas de custo");
     }
 
     @Test
-    void aProcedureStartsOnADeployedVersion() {
-        startProcedure(procedure, draft, 1);
+    void aProcedureStartsBeforeItIsSubmitted() {
+        startProcedure(procedure);
 
         assertThat(jdbc.sql("select state from engine.procedure where id = :id")
                         .param("id", procedure)
@@ -53,16 +56,10 @@ class ProcedureTablesIT {
     }
 
     @Test
-    void aProcedureCannotStartOnAVersionThatWasNeverDeployed() {
-        assertThatThrownBy(() -> startProcedure(procedure, draft, 2))
-                .isInstanceOf(DataIntegrityViolationException.class);
-    }
-
-    @Test
     void twoProceduresCannotHaveTheSameReference() {
-        startProcedure(procedure, draft, 1);
+        startProcedure(procedure);
         UUID other = UUID.randomUUID();
-        startProcedure(other, draft, 1);
+        startProcedure(other);
         setReference(procedure, "AC-2026-0147");
 
         assertThatThrownBy(() -> setReference(other, "AC-2026-0147"))
@@ -71,7 +68,7 @@ class ProcedureTablesIT {
 
     @Test
     void aProcedureIsInOneOfTheKnownStates() {
-        startProcedure(procedure, draft, 1);
+        startProcedure(procedure);
 
         assertThatThrownBy(() -> jdbc.sql("update engine.procedure set state = 'lost' where id = :id")
                         .param("id", procedure)
@@ -80,8 +77,16 @@ class ProcedureTablesIT {
     }
 
     @Test
+    void aPersonTakesPartInAProcedureOnce() {
+        startProcedure(procedure);
+        addParticipant(procedure, rui);
+
+        assertThatThrownBy(() -> addParticipant(procedure, rui)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void aSubmittedVersionOfTheRequestCannotBeChanged() {
-        startProcedure(procedure, draft, 1);
+        startProcedure(procedure);
         submitData(procedure, 1);
 
         assertThatThrownBy(() -> jdbc.sql(
@@ -94,7 +99,7 @@ class ProcedureTablesIT {
 
     @Test
     void aSubmittedVersionOfTheRequestCannotBeDeleted() {
-        startProcedure(procedure, draft, 1);
+        startProcedure(procedure);
         submitData(procedure, 1);
 
         assertThatThrownBy(() -> jdbc.sql("delete from engine.request_data where procedure = :id")
@@ -106,7 +111,7 @@ class ProcedureTablesIT {
 
     @Test
     void eachResubmissionIsANewVersionOfTheRequest() {
-        startProcedure(procedure, draft, 1);
+        startProcedure(procedure);
         submitData(procedure, 1);
         submitData(procedure, 2);
 
@@ -119,24 +124,29 @@ class ProcedureTablesIT {
     }
 
     @Test
-    void aTaskIsCompletedWithItsOutcomeAndWhoActed() {
-        startProcedure(procedure, draft, 1);
-        UUID task = createTask(procedure);
+    void anOpenTaskIsInTheInboxOfEachOfItsCandidates() {
+        startProcedure(procedure);
+        UUID task = createTask(procedure, List.of(rui, carla));
 
-        int completed = jdbc.sql("""
-                        update engine.task
-                        set completed_at = now(), outcome = 'approved',
-                            completed_by_issuer = :issuer, completed_by_subject = 'rui-matos',
-                            completed_by_name = 'Rui Matos', completed_by_job_title = 'Chefe de Divisão'
-                        where id = :id and completed_at is null""").param("issuer", ISSUER).param("id", task).update();
+        assertThat(inbox(rui)).containsExactly(task);
+        assertThat(inbox(carla)).containsExactly(task);
+        assertThat(inbox(ana)).isEmpty();
+    }
 
-        assertThat(completed).isEqualTo(1);
+    @Test
+    void theFirstCandidateToActCompletesTheTaskForEveryone() {
+        startProcedure(procedure);
+        UUID task = createTask(procedure, List.of(rui, carla));
+
+        assertThat(complete(task, rui)).isEqualTo(1);
+        assertThat(complete(task, carla)).isZero();
+        assertThat(inbox(carla)).isEmpty();
     }
 
     @Test
     void aTaskCannotBeHalfCompleted() {
-        startProcedure(procedure, draft, 1);
-        UUID task = createTask(procedure);
+        startProcedure(procedure);
+        UUID task = createTask(procedure, List.of(rui));
 
         assertThatThrownBy(() -> jdbc.sql("update engine.task set completed_at = now() where id = :id")
                         .param("id", task)
@@ -146,8 +156,8 @@ class ProcedureTablesIT {
 
     @Test
     void anEntryOfTheHistoryCannotBeChanged() {
-        startProcedure(procedure, draft, 1);
-        record(procedure, "submitted");
+        startProcedure(procedure);
+        record(procedure, "requester", "submitted");
 
         assertThatThrownBy(() -> jdbc.sql("update engine.audit_entry set action = 'closed' where procedure = :id")
                         .param("id", procedure)
@@ -158,8 +168,8 @@ class ProcedureTablesIT {
 
     @Test
     void anEntryOfTheHistoryCannotBeDeleted() {
-        startProcedure(procedure, draft, 1);
-        record(procedure, "submitted");
+        startProcedure(procedure);
+        record(procedure, "requester", "submitted");
 
         assertThatThrownBy(() -> jdbc.sql("delete from engine.audit_entry where procedure = :id")
                         .param("id", procedure)
@@ -169,23 +179,43 @@ class ProcedureTablesIT {
     }
 
     @Test
-    void theHistoryOnlyRecordsKnownActions() {
-        startProcedure(procedure, draft, 1);
+    void theHistoryRecordsAFailedAction() {
+        startProcedure(procedure);
 
-        assertThatThrownBy(() -> record(procedure, "deleted")).isInstanceOf(DataIntegrityViolationException.class);
+        record(procedure, "reviewer", "failed");
+
+        assertThat(jdbc.sql("select actor_role from engine.audit_entry where procedure = :id and action = 'failed'")
+                        .param("id", procedure)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("reviewer");
     }
 
-    void startProcedure(UUID id, UUID draft, int version) {
+    @Test
+    void theHistoryOnlyRecordsKnownActions() {
+        startProcedure(procedure);
+
+        assertThatThrownBy(() -> record(procedure, "requester", "deleted"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void theHistoryOnlyRecordsKnownRoles() {
+        startProcedure(procedure);
+
+        assertThatThrownBy(() -> record(procedure, "director", "approved"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    void startProcedure(UUID id) {
         jdbc.sql("""
                         insert into engine.procedure
-                            (id, draft, version, current_step, requester_issuer, requester_subject,
-                             requester_name, requester_job_title)
-                        values (:id, :draft, :version, 'pedido', :issuer, 'ana-ferreira',
-                                'Ana Ferreira', 'Técnica Superior')""")
+                            (id, draft, version, specification, current_step, requester)
+                        values (:id, :draft, 1, cast(:specification as jsonb), 'pedido', :requester)""")
                 .param("id", id)
-                .param("draft", draft)
-                .param("version", version)
-                .param("issuer", ISSUER)
+                .param("draft", UUID.randomUUID())
+                .param("specification", SPECIFICATION)
+                .param("requester", ana)
                 .update();
     }
 
@@ -196,27 +226,54 @@ class ProcedureTablesIT {
                 .update();
     }
 
+    void addParticipant(UUID procedure, UUID person) {
+        jdbc.sql("insert into engine.participant (procedure, person) values (:procedure, :person)")
+                .param("procedure", procedure)
+                .param("person", person)
+                .update();
+    }
+
     void submitData(UUID id, int version) {
         jdbc.sql("""
                         insert into engine.request_data (procedure, version, answers)
                         values (:id, :version, '{"destino": "Lisboa"}')""").param("id", id).param("version", version).update();
     }
 
-    UUID createTask(UUID procedure) {
+    UUID createTask(UUID procedure, List<UUID> candidates) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        insert into engine.task (id, procedure, step, handled_by)
-                        values (:id, :procedure, 'validacao-chefia', 'chefias')""").param("id", id).param("procedure", procedure).update();
+                        insert into engine.task (id, procedure, step, assignee_rule)
+                        values (:id, :procedure, 'validacao-chefia', '{"managersOfRequesterUnit": true}')""").param("id", id).param("procedure", procedure).update();
+        for (UUID candidate : candidates) {
+            jdbc.sql("insert into engine.task_candidate (task, person) values (:task, :person)")
+                    .param("task", id)
+                    .param("person", candidate)
+                    .update();
+        }
         return id;
     }
 
-    void record(UUID procedure, String action) {
+    List<UUID> inbox(UUID person) {
+        return jdbc.sql("""
+                        select t.id from engine.task t
+                        join engine.task_candidate c on c.task = t.id
+                        where c.person = :person and t.completed_at is null""").param("person", person).query(UUID.class).list();
+    }
+
+    int complete(UUID task, UUID person) {
+        return jdbc.sql("""
+                        update engine.task
+                        set completed_at = now(), outcome = 'approved', completed_by = :person
+                        where id = :id and completed_at is null""").param("person", person).param("id", task).update();
+    }
+
+    void record(UUID procedure, String role, String action) {
         jdbc.sql("""
-                        insert into engine.audit_entry
-                            (procedure, actor_issuer, actor_subject, actor_name, actor_job_title, action)
-                        values (:procedure, :issuer, 'ana-ferreira', 'Ana Ferreira', 'Técnica Superior', :action)""")
+                        insert into engine.audit_entry (procedure, actor, actor_role, action)
+                        values (:procedure, :actor, :role, :action)""")
                 .param("procedure", procedure)
-                .param("issuer", ISSUER)
+                .param("actor", ana)
+                .param("role", role)
                 .param("action", action)
                 .update();
     }
