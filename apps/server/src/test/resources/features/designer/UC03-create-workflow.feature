@@ -1,7 +1,6 @@
 # Draft for team review: the examples come from the acceptance criteria of issue #27 and the
 # messages of the web prototype (apps/web/src/domain/designer.ts). No Example Mapping was run yet.
-# @wip until the Designer API exists: the pipeline skips it.
-@UC03 @wip
+@UC03
 Feature: Create workflow
   As a Workflow Manager,
   I want to create a workflow in the designer, one question at a time,
@@ -10,6 +9,19 @@ Feature: Create workflow
   Background:
     Given Sofia Almeida is a Workflow Manager
     And she is designing the workflow "Ajudas de custo"
+
+  Rule: Only a Workflow Manager can design and create workflows
+    # The role is the app role «Workflow Manager» that UC01 reads from Entra ID.
+
+    Scenario: Someone who is not a Workflow Manager cannot start designing a workflow
+      Given Ana Ferreira is not a Workflow Manager
+      When she starts designing the workflow "Horas extraordinárias"
+      Then she is not allowed to
+
+    Scenario: Someone who is not a Workflow Manager cannot create a workflow
+      Given Ana Ferreira is not a Workflow Manager
+      When she tries to create the workflow Sofia Almeida is designing
+      Then she is not allowed to
 
   # Criteria 1, 2, 3 and 8 are about the screens, so they run in the UC03 browser journey.
   # open question: does the Definition of Done accept @browser rules that run only in the nightly journey?
@@ -52,13 +64,17 @@ Feature: Create workflow
     Scenario: A reason with no name cannot be created
       Given the step "Validação da chefia" has a return reason with no name
       When she creates the workflow
-      Then it is refused with "Passo 2 («Validação da chefia»): dê um nome ao motivo 1."
+      Then it is refused with "Passo 2 («Validação da chefia»): dê um nome ao motivo de devolução 1."
 
     Scenario: Return and reject reasons are kept apart
       When she gives "Validação da chefia" the return reason "Preenchido incorretamente" and the reject reason "Pedido não autorizado"
       Then "Validação da chefia" can be returned for "Preenchido incorretamente" only
       And it can be rejected for "Pedido não autorizado" only
 
+  # The path is edited in the browser, and the Designer only stores the whole draft
+  # (docs/sequence_diagram.txt, UC03): these run in the UC03 browser journey. When publishing, the
+  # Designer still refuses a path whose final validation is not last or not alone.
+  @browser
   Rule: Steps can be edited, moved, removed or added, and the final validation is always last
     # open question: can the request step «Pedido» ever be removed or moved? The prototype says no.
 

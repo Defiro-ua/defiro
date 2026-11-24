@@ -1,6 +1,5 @@
 package io.github.defiro.acceptance.identity;
 
-import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.cucumber.datatable.DataTable;
@@ -10,11 +9,9 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import io.github.defiro.FakeEntraId;
 import io.github.defiro.FakeEntraId.Account;
-import io.restassured.http.Cookie;
+import io.github.defiro.acceptance.Browser;
 import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
 import java.net.URI;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -22,8 +19,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * UC01. Each scenario is one browser: it keeps defiro's cookies and follows the sign-in redirects by
- * hand, through {@link FakeEntraId}, the way a browser does through Microsoft's sign-in page.
+ * UC01. Each scenario is one {@link Browser}: it keeps defiro's cookies and follows the sign-in
+ * redirects by hand, through {@link FakeEntraId}, the way a browser does through Microsoft's sign-in
+ * page.
  */
 public class IdentitySteps {
 
@@ -40,7 +38,7 @@ public class IdentitySteps {
     private static final Map<String, String> APP_ROLE_VALUES = Map.of("Workflow Manager", "WorkflowManager");
 
     private final FakeEntraId entraId = FakeEntraId.instance();
-    private final Map<String, String> cookies = new HashMap<>();
+    private final Browser browser = new Browser();
 
     @Autowired
     JdbcTemplate jdbc;
@@ -208,60 +206,25 @@ public class IdentitySteps {
         assertThat(location.getQuery()).isEqualTo("aviso=" + notice);
     }
 
-    /** The first leg: defiro sends the browser to the provider's authorization endpoint. */
     private Response startSignIn() {
-        return remember(app().get("/oauth2/authorization/" + FakeEntraId.REGISTRATION_ID));
+        return browser.startSignIn();
     }
 
-    /** The whole round trip: defiro, the provider's sign-in, and back to defiro's callback. */
     private Response signIn(String name) {
-        entraId.signInAs(name);
-        Response toProvider = startSignIn();
-        assertThat(toProvider.statusCode())
-                .as("defiro sends the browser to Entra ID")
-                .isEqualTo(302);
-        Response fromProvider =
-                given().urlEncodingEnabled(false).redirects().follow(false).get(toProvider.header("Location"));
-        assertThat(fromProvider.statusCode())
-                .as("Entra ID sends the browser back")
-                .isEqualTo(302);
-        return remember(app().get(fromProvider.header("Location")));
+        return browser.signIn(name);
     }
 
-    /** As the web app does: it reads the CSRF cookie and sends it back in a header. */
     private Response signOut() {
-        profile();
-        String csrf = cookies.get("XSRF-TOKEN");
-        RequestSpecification request = app();
-        if (csrf != null) {
-            request = request.header("X-XSRF-TOKEN", csrf);
-        }
-        return remember(request.post("/logout"));
+        return browser.signOut();
     }
 
     private Response profile() {
-        return remember(app().get("/api/me"));
+        return browser.profile();
     }
 
     private static void assertLandsOnInbox(Response response) {
         assertThat(response.statusCode()).isEqualTo(302);
         assertThat(URI.create(response.header("Location")).getPath()).isEqualTo(INBOX);
-    }
-
-    private RequestSpecification app() {
-        // Locations come already encoded, so they are sent as they are, like a browser does.
-        return given().urlEncodingEnabled(false).redirects().follow(false).cookies(cookies);
-    }
-
-    private Response remember(Response response) {
-        for (Cookie cookie : response.detailedCookies()) {
-            if (cookie.getMaxAge() == 0 || cookie.getValue().isEmpty()) {
-                cookies.remove(cookie.getName());
-            } else {
-                cookies.put(cookie.getName(), cookie.getValue());
-            }
-        }
-        return response;
     }
 
     private static String appRoleValue(String displayName) {

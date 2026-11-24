@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@WebMvcTest
+@WebMvcTest(ProfileController.class)
 @Import({SecurityConfiguration.class, EntraRegistration.class})
 class SignInTest {
 
