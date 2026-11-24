@@ -4,9 +4,11 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Profile } from './api/session'
 import { fetchProfile } from './api/session'
+import * as designer from './api/designer'
 import { App } from './App'
 
 vi.mock('./api/session', async (original) => ({ ...(await original<typeof import('./api/session')>()), fetchProfile: vi.fn() }))
+vi.mock('./api/designer')
 
 const sofia: Profile = {
   name: 'Sofia Almeida',
@@ -36,6 +38,7 @@ const address = () => screen.getByTestId('address').textContent
 describe('App', () => {
   beforeEach(() => {
     vi.mocked(fetchProfile).mockReset()
+    vi.mocked(designer.listDrafts).mockResolvedValue([])
   })
 
   it('opens on the home page, with «Entrar»', () => {
@@ -90,18 +93,35 @@ describe('App', () => {
   it('opens each screen of the menu, marked as the current page', async () => {
     vi.mocked(fetchProfile).mockResolvedValue(sofia)
     renderAt('/caixa-de-tarefas')
-    const nav = await screen.findByRole('navigation', { name: 'Menu principal' })
+    await screen.findByRole('navigation', { name: 'Menu principal' })
 
     for (const [label, path] of [
       ['Novo pedido', '/novo-pedido'],
-      ['Criar workflow', '/workflows/criar'],
       ['Workflows', '/workflows'],
     ]) {
-      await userEvent.click(within(nav).getByRole('link', { name: label }))
+      await userEvent.click(within(screen.getByRole('navigation', { name: 'Menu principal' })).getByRole('link', { name: label }))
       expect(await screen.findByRole('heading', { level: 1, name: label })).toBeInTheDocument()
       expect(address()).toBe(path)
-      expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page')
+      // each screen draws its own menu, so it is looked up again
+      const menu = screen.getByRole('navigation', { name: 'Menu principal' })
+      expect(within(menu).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page')
     }
+  })
+
+  it('opens «Criar workflow» full screen, one question at a time, on a new draft', async () => {
+    vi.mocked(fetchProfile).mockResolvedValue(sofia)
+    const draft = { id: 'd1', revision: 1, name: '', steps: [], publishedVersion: null, publishedBy: null, publishedAt: null }
+    vi.mocked(designer.startDraft).mockResolvedValue(draft)
+    vi.mocked(designer.loadDraft).mockResolvedValue(draft)
+    vi.mocked(designer.listStepTypes).mockResolvedValue([])
+    renderAt('/caixa-de-tarefas')
+    const nav = await screen.findByRole('navigation', { name: 'Menu principal' })
+
+    await userEvent.click(within(nav).getByRole('link', { name: 'Criar workflow' }))
+
+    expect(await screen.findByRole('heading', { level: 2, name: /Como se chama o workflow\?/ })).toBeInTheDocument()
+    expect(address()).toBe('/workflows/criar/d1')
+    expect(screen.queryByRole('navigation', { name: 'Menu principal' })).not.toBeInTheDocument()
   })
 
   it('keeps the management screens for the Workflow Manager, also when opened by their address', async () => {

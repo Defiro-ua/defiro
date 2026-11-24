@@ -23,8 +23,8 @@ Feature: Create workflow
       When she tries to create the workflow Sofia Almeida is designing
       Then she is not allowed to
 
-  # Criteria 1, 2, 3 and 8 are about the screens, so they run in the UC03 browser journey.
-  # open question: does the Definition of Done accept @browser rules that run only in the nightly journey?
+  # Criteria 1, 2, 3 and 8 are about the screens: these @browser rules run in a browser (Playwright),
+  # against the web app, in the Acceptance stage. The request form joins the screens with UC04.
   @browser
   Rule: «Criar workflow» is the main button in the Workflow Manager's side menu
 
@@ -37,7 +37,7 @@ Feature: Create workflow
 
     Scenario: The first screen asks for the name
       When she starts creating a workflow
-      Then she sees the screen for the name with «Passo 1 de 6»
+      Then she sees the screen for the name with «Passo 1 de 4»
 
   @browser
   Rule: «Anterior» goes back without losing answers, and «Sair» leaves the designer
@@ -48,7 +48,6 @@ Feature: Create workflow
       Then the name "Ajudas de custo" is still there
 
   Rule: Each review step has a name, who handles it, a deadline and its reasons
-    # open question (UC06, NXS2608): does the designer only store the deadline, with the 1 to 90 rule in UC06?
 
     Scenario: A complete review step joins the path
       When she adds the review step "Validação da chefia" handled by "Chefias da unidade do requerente" with a deadline of 5 working days
@@ -72,8 +71,8 @@ Feature: Create workflow
       And it can be rejected for "Pedido não autorizado" only
 
   # The path is edited in the browser, and the Designer only stores the whole draft
-  # (docs/sequence_diagram.txt, UC03): these run in the UC03 browser journey. When publishing, the
-  # Designer still refuses a path whose final validation is not last or not alone.
+  # (docs/sequence_diagram.txt, UC03): these run in a browser. When publishing, the Designer still
+  # refuses a path whose final validation is not last or not alone.
   @browser
   Rule: Steps can be edited, moved, removed or added, and the final validation is always last
     # open question: can the request step «Pedido» ever be removed or moved? The prototype says no.
