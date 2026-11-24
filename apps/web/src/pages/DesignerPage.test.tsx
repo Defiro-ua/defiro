@@ -82,7 +82,17 @@ const question = () => screen.findByRole('heading', { level: 2 })
 const goOn = (user: ReturnType<typeof userEvent.setup>) =>
   user.click(screen.getByRole('button', { name: /^(Continuar|Rever o workflow|Guardar o passo|Guardar e voltar)/ }))
 
+// Not the prototype's list: the cards must be the Designer's, from the organization's directory (UC05)
+const organization = [
+  { name: 'Divisão de Urbanismo', note: 'Unidade do IdP' },
+  { name: 'Divisão Financeira', note: 'Unidade do IdP' },
+]
+
 beforeEach(() => {
+  vi.mocked(api.listGroups).mockResolvedValue({
+    requesters: [{ name: 'Todos os trabalhadores', note: 'Todas as pessoas da organização' }, ...organization],
+    handlers: [{ name: 'Chefias da unidade do requerente', note: 'Calculado a partir da unidade de quem faz o pedido' }, ...organization],
+  })
   vi.mocked(api.listStepTypes).mockResolvedValue([
     { ...submission, outcomes: ['submitted'] },
     { ...review, outcomes: decisions },
@@ -466,5 +476,43 @@ describe('the request form', () => {
     expect(form).toHaveTextContent('JustificaçãoTexto longo · opcional')
     await user.click(within(form).getByRole('button', { name: 'Alterar Formulário do pedido' }))
     expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
+  })
+})
+
+describe('who handles each step', () => {
+  const cards = (group: RegExp) => within(screen.getByRole('group', { name: group })).getAllByRole('radio')
+  const names = (radios: HTMLElement[]) => radios.map((r) => r.closest('label')?.textContent)
+
+  it('offers everyone, or the groups and units of the organization, to make the request', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(stored('Ajudas de custo'))
+    open('/workflows/criar/d1?ecra=quem')
+    await question()
+
+    expect(names(cards(/^Quem pode fazer o pedido/))).toEqual([
+      'Todos os trabalhadores Todas as pessoas da organização',
+      'Divisão de Urbanismo Unidade do IdP',
+      'Divisão Financeira Unidade do IdP',
+    ])
+  })
+
+  it("offers the requester's managers, or the groups and units of the organization, to handle a step", async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(stored('Ajudas de custo', reviewStep('a', 'Validação da chefia')))
+    open('/workflows/criar/d1?ecra=pn:a')
+    await question()
+
+    expect(names(cards(/^Quem trata este passo/))).toEqual([
+      'Chefias da unidade do requerente Calculado a partir da unidade de quem faz o pedido',
+      'Divisão de Urbanismo Unidade do IdP',
+      'Divisão Financeira Unidade do IdP',
+    ])
+    expect(screen.getByRole('radio', { name: /^Chefias da unidade do requerente/ })).toBeChecked()
+  })
+
+  it('says so when the groups cannot be read', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(stored('Ajudas de custo'))
+    vi.mocked(api.listGroups).mockRejectedValue(new Error('GET answered 500'))
+    open('/workflows/criar/d1')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível abrir o rascunho.')
   })
 })

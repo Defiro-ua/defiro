@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
@@ -37,10 +38,21 @@ public final class WebBrowser implements AutoCloseable {
     private static synchronized Browser chromium() {
         if (chromium == null) {
             Playwright playwright = Playwright.create();
-            chromium = playwright.chromium().launch();
+            chromium = playwright.chromium().launch(launchOptions());
             Runtime.getRuntime().addShutdownHook(new Thread(playwright::close));
         }
         return chromium;
+    }
+
+    /**
+     * Headless, as in CI. To watch the scenarios in a window, run with {@code -Dplaywright.headed=true};
+     * each action then waits {@code playwright.slowMo} milliseconds (500 unless given), so the eye can
+     * follow it.
+     */
+    static BrowserType.LaunchOptions launchOptions() {
+        boolean headed = Boolean.getBoolean("playwright.headed");
+        double slowMo = Double.parseDouble(System.getProperty("playwright.slowMo", headed ? "500" : "0"));
+        return new BrowserType.LaunchOptions().setHeadless(!headed).setSlowMo(slowMo);
     }
 
     public Page page() {

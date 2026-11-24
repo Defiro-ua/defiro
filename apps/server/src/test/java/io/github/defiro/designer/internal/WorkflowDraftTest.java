@@ -21,6 +21,11 @@ class WorkflowDraftTest {
     static final PluginRef REVIEW = new PluginRef("review", "0.1.0");
     static final PluginRef FINAL_VALIDATION = new PluginRef("final-validation", "0.1.0");
     static final Set<PluginRef> CATALOGUE = Set.of(SUBMISSION, REVIEW, FINAL_VALIDATION);
+    /** Who can request and who can handle a step, as the Designer offers them (UC05) */
+    static final Groups GROUPS = new Groups(
+            List.of("Todos os trabalhadores", "Divisão Financeira"),
+            List.of("Chefias da unidade do requerente", "Divisão Financeira"));
+
     static final List<String> DECISIONS = List.of("approved", "returned", "rejected");
     static final Map<PluginRef, List<String>> OUTCOMES =
             Map.of(SUBMISSION, List.of("submitted"), REVIEW, DECISIONS, FINAL_VALIDATION, DECISIONS);
@@ -44,12 +49,12 @@ class WorkflowDraftTest {
     void aCompleteWorkflowHasNoProblems() {
         WorkflowDraft draft = withSteps(complete("Validação da chefia"), finalValidation());
 
-        assertThat(draft.problems(CATALOGUE)).isEmpty();
+        assertThat(draft.problems(CATALOGUE, GROUPS)).isEmpty();
     }
 
     @Test
     void aWorkflowWithNoNameIsRefusedOnItsName() {
-        assertThat(named("", complete("Validação da chefia")).problems(CATALOGUE))
+        assertThat(named("", complete("Validação da chefia")).problems(CATALOGUE, GROUPS))
                 .containsExactly(NO_NAME);
     }
 
@@ -57,7 +62,7 @@ class WorkflowDraftTest {
     @NullSource
     @ValueSource(strings = {"   ", "\t"})
     void blankOrMissingNameIsNoName(String name) {
-        assertThat(named(name, complete("Validação da chefia")).problems(CATALOGUE))
+        assertThat(named(name, complete("Validação da chefia")).problems(CATALOGUE, GROUPS))
                 .containsExactly(NO_NAME);
     }
 
@@ -66,7 +71,7 @@ class WorkflowDraftTest {
         Step unanswered =
                 new Step("n2", REVIEW, "", null, null, List.of(), List.of("Pedido não autorizado"), List.of());
 
-        assertThat(withSteps(unanswered).problems(CATALOGUE))
+        assertThat(withSteps(unanswered).problems(CATALOGUE, GROUPS))
                 .containsExactly(
                         new Problem("steps[1].name", "Passo 2: falta o nome."),
                         new Problem("steps[1].handledBy", "Passo 2: escolha quem trata."),
@@ -78,7 +83,7 @@ class WorkflowDraftTest {
     void aDeadlineOutsideOneToNinetyWorkingDaysIsAProblem(int days) {
         Step step = complete("Validação da chefia").withDeadline(days);
 
-        assertThat(withSteps(step).problems(CATALOGUE))
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[1].deadline",
                         "Passo 2 («Validação da chefia»): o prazo legal tem de ser de 1 a 90 dias úteis."));
@@ -87,7 +92,7 @@ class WorkflowDraftTest {
     @ParameterizedTest
     @ValueSource(ints = {1, 90})
     void oneAndNinetyWorkingDaysAreDeadlinesToo(int days) {
-        assertThat(withSteps(complete("Validação da chefia").withDeadline(days)).problems(CATALOGUE))
+        assertThat(withSteps(complete("Validação da chefia").withDeadline(days)).problems(CATALOGUE, GROUPS))
                 .isEmpty();
     }
 
@@ -97,7 +102,7 @@ class WorkflowDraftTest {
                 complete("Validação da chefia"),
                 complete("Verificação financeira").withReasons(List.of(), List.of()));
 
-        assertThat(draft.problems(CATALOGUE))
+        assertThat(draft.problems(CATALOGUE, GROUPS))
                 .containsExactly(
                         new Problem(
                                 "steps[2].reasons",
@@ -108,14 +113,14 @@ class WorkflowDraftTest {
     void aStepMayHaveOnlyRejectReasons() {
         Step step = complete("Validação da chefia").withReasons(List.of(), List.of("Pedido não autorizado"));
 
-        assertThat(withSteps(step).problems(CATALOGUE)).isEmpty();
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS)).isEmpty();
     }
 
     @Test
     void aReturnReasonWithNoNameIsAProblemOfThatReason() {
         Step step = complete("Validação da chefia").withReasons(List.of(""), List.of());
 
-        assertThat(withSteps(step).problems(CATALOGUE))
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[1].returnReasons[0]",
                         "Passo 2 («Validação da chefia»): dê um nome ao motivo de devolução 1."));
@@ -126,7 +131,7 @@ class WorkflowDraftTest {
         Step step = complete("Validação da chefia")
                 .withReasons(List.of("Preenchido incorretamente"), List.of("Pedido não autorizado", " "));
 
-        assertThat(withSteps(step).problems(CATALOGUE))
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[1].rejectReasons[1]",
                         "Passo 2 («Validação da chefia»): dê um nome ao motivo de rejeição 2."));
@@ -138,7 +143,7 @@ class WorkflowDraftTest {
         Step request = draft.steps().getFirst().withHandledBy("");
         draft = new WorkflowDraft(draft.name(), List.of(request, draft.steps().get(1)));
 
-        assertThat(draft.problems(CATALOGUE))
+        assertThat(draft.problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem("steps[0].handledBy", "Passo 1 («Pedido»): escolha quem trata."));
     }
 
@@ -148,7 +153,7 @@ class WorkflowDraftTest {
                 WorkflowDraft.named("Ajudas de custo", SUBMISSION).steps().getFirst();
         WorkflowDraft draft = new WorkflowDraft("Ajudas de custo", List.of(complete("Validação da chefia"), request));
 
-        assertThat(draft.problems(CATALOGUE))
+        assertThat(draft.problems(CATALOGUE, GROUPS))
                 .contains(new Problem("steps", "O caminho começa pelo pedido, e só tem um pedido."));
     }
 
@@ -156,21 +161,21 @@ class WorkflowDraftTest {
     void theFinalValidationMustBeLast() {
         WorkflowDraft draft = withSteps(finalValidation(), complete("Validação da chefia"));
 
-        assertThat(draft.problems(CATALOGUE)).containsExactly(new Problem("steps", ONE_FINAL_VALIDATION_LAST));
+        assertThat(draft.problems(CATALOGUE, GROUPS)).containsExactly(new Problem("steps", ONE_FINAL_VALIDATION_LAST));
     }
 
     @Test
     void thereIsOnlyOneFinalValidation() {
         WorkflowDraft draft = withSteps(complete("Validação da chefia"), finalValidation(), finalValidation());
 
-        assertThat(draft.problems(CATALOGUE)).containsExactly(new Problem("steps", ONE_FINAL_VALIDATION_LAST));
+        assertThat(draft.problems(CATALOGUE, GROUPS)).containsExactly(new Problem("steps", ONE_FINAL_VALIDATION_LAST));
     }
 
     @Test
     void aStepTypeMissingFromTheCatalogueIsAProblem() {
         Step step = complete("Validação da chefia").withPlugin(new PluginRef("review", "9.9.9"));
 
-        assertThat(withSteps(step).problems(CATALOGUE))
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[1].plugin",
                         "Passo 2 («Validação da chefia»): o tipo de passo review@9.9.9 não está no catálogo."));
@@ -232,7 +237,7 @@ class WorkflowDraftTest {
 
     @Test
     void aWorkflowWithNoQuestionForTheRequesterIsRefused() {
-        assertThat(asking().problems(CATALOGUE))
+        assertThat(asking().problems(CATALOGUE, GROUPS))
                 .containsExactly(
                         new Problem(
                                 "steps[0].fields",
@@ -243,7 +248,7 @@ class WorkflowDraftTest {
     void aQuestionNeedsALabel() {
         FieldSpecification unlabelled = new FieldSpecification("q2", " ", "number", false, List.of());
 
-        assertThat(asking(MATERIAL, unlabelled).problems(CATALOGUE))
+        assertThat(asking(MATERIAL, unlabelled).problems(CATALOGUE, GROUPS))
                 .containsExactly(
                         new Problem("steps[0].fields[1].label", "Formulário do pedido, campo 2: falta o rótulo."));
     }
@@ -253,13 +258,13 @@ class WorkflowDraftTest {
         FieldSpecification transport =
                 new FieldSpecification("q1", "Transporte", "single-choice", true, List.of("Carro próprio", " "));
 
-        assertThat(asking(transport).problems(CATALOGUE))
+        assertThat(asking(transport).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[0].fields[0].options",
                         "Formulário do pedido, campo 1 («Transporte»): faltam opções de resposta (pelo menos duas)."));
         assertThat(asking(new FieldSpecification(
                                 "q1", "Transporte", "single-choice", true, List.of("Carro", "Comboio")))
-                        .problems(CATALOGUE))
+                        .problems(CATALOGUE, GROUPS))
                 .isEmpty();
     }
 
@@ -267,7 +272,7 @@ class WorkflowDraftTest {
     void aQuestionHasOneOfTheAnswerTypes() {
         FieldSpecification colour = new FieldSpecification("q1", "Cor", "colour", true, List.of());
 
-        assertThat(asking(colour).problems(CATALOGUE))
+        assertThat(asking(colour).problems(CATALOGUE, GROUPS))
                 .containsExactly(new Problem(
                         "steps[0].fields[0].type",
                         "Formulário do pedido, campo 1 («Cor»): o tipo de resposta colour não existe."));
@@ -277,7 +282,7 @@ class WorkflowDraftTest {
     @ValueSource(strings = {"short-text", "long-text", "number", "date", "date-time", "yes-no", "files"})
     void everyAnswerTypeButTheSingleChoiceNeedsNoOptions(String type) {
         assertThat(asking(new FieldSpecification("q1", "Pergunta", type, false, List.of()))
-                        .problems(CATALOGUE))
+                        .problems(CATALOGUE, GROUPS))
                 .isEmpty();
     }
 
@@ -285,7 +290,7 @@ class WorkflowDraftTest {
     void onlyTheRequestAsksQuestions() {
         Step review = complete("Validação da chefia").withFields(List.of(MATERIAL));
 
-        assertThat(withSteps(review).problems(CATALOGUE))
+        assertThat(withSteps(review).problems(CATALOGUE, GROUPS))
                 .containsExactly(
                         new Problem("steps[1].fields", "Passo 2 («Validação da chefia»): só o pedido tem perguntas."));
     }
@@ -317,6 +322,38 @@ class WorkflowDraftTest {
         assertThat(questions)
                 .extracting(FieldSpecification::options)
                 .containsExactly(List.of("Carro", "Comboio"), List.of());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Departamento de Marketing", "Todos os trabalhadores"})
+    void aStepIsHandledByOneOfTheGroupsTheDesignerOffers(String handledBy) {
+        Step step = complete("Validação da chefia").withHandledBy(handledBy);
+
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS))
+                .containsExactly(new Problem(
+                        "steps[1].handledBy",
+                        "Passo 2 («Validação da chefia»): «" + handledBy
+                                + "» não é um grupo nem uma unidade da organização."));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Departamento de Marketing", "Chefias da unidade do requerente"})
+    void theRequestIsMadeByOneOfTheGroupsTheDesignerOffers(String handledBy) {
+        WorkflowDraft draft = withSteps(complete("Validação da chefia"));
+        List<Step> path = new ArrayList<>(draft.steps());
+        path.set(0, path.getFirst().withHandledBy(handledBy));
+
+        assertThat(new WorkflowDraft(draft.name(), path).problems(CATALOGUE, GROUPS))
+                .containsExactly(new Problem(
+                        "steps[0].handledBy",
+                        "Passo 1 («Pedido»): «" + handledBy + "» não é um grupo nem uma unidade da organização."));
+    }
+
+    @Test
+    void aGroupTheDesignerOffersIsAccepted() {
+        Step step = complete("Verificação financeira").withHandledBy("Divisão Financeira");
+
+        assertThat(withSteps(step).problems(CATALOGUE, GROUPS)).isEmpty();
     }
 
     /** "Ajudas de custo": the request, then these steps. */

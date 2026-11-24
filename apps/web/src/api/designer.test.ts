@@ -1,5 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { importDraft, listDrafts, listStepTypes, loadDraft, publishDraft, saveDraft, specificationUrl, startDraft, type StoredDraft } from './designer'
+import {
+  importDraft,
+  listDrafts,
+  listGroups,
+  listStepTypes,
+  loadDraft,
+  publishDraft,
+  saveDraft,
+  specificationUrl,
+  startDraft,
+  type StoredDraft,
+} from './designer'
 
 const stored: StoredDraft = {
   id: 'd1',
@@ -71,6 +82,14 @@ describe('the Designer API', () => {
     const types = [{ name: 'review', version: '0.1.0', outcomes: ['approved', 'returned', 'rejected'] }]
     answer(200, types)
     await expect(listStepTypes()).resolves.toEqual(types)
+  })
+
+  it('asks the Designer who can request and who can handle a step', async () => {
+    const groups = { requesters: [{ name: 'Todos os trabalhadores', note: 'Todas as pessoas da organização' }], handlers: [] }
+    const fetch = answer(200, groups)
+
+    await expect(listGroups()).resolves.toEqual(groups)
+    expect(fetch.mock.calls[0][0]).toBe('/api/designer/groups')
   })
 
   it('loads a workflow file as it is, as a new draft', async () => {

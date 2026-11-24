@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Publishing a draft, as docs/sequence_diagram.txt describes it: load the draft, check it against
- * every workflow rule and the plugins in the catalogue, build the specification, deploy it to the
+ * every workflow rule, the plugins in the catalogue and the organization's groups, build the specification, deploy it to the
  * Engine, and mark the draft as published with the version the Engine gives back. Safe to retry:
  * the Engine gives the same version for the same revision.
  */
@@ -24,11 +24,13 @@ class Publisher {
     private final Drafts drafts;
     private final PluginCatalogue catalogue;
     private final Deployment deployment;
+    private final GroupOptions groups;
 
-    Publisher(Drafts drafts, PluginCatalogue catalogue, Deployment deployment) {
+    Publisher(Drafts drafts, PluginCatalogue catalogue, Deployment deployment, GroupOptions groups) {
         this.drafts = drafts;
         this.catalogue = catalogue;
         this.deployment = deployment;
+        this.groups = groups;
     }
 
     /**
@@ -44,7 +46,7 @@ class Publisher {
             WorkflowDraft draft = stored.draft();
             Set<PluginRef> plugins =
                     catalogue.plugins().stream().map(PluginDescriptor::plugin).collect(Collectors.toSet());
-            List<Problem> problems = draft.problems(plugins);
+            List<Problem> problems = draft.problems(plugins, groups.groups());
             if (!problems.isEmpty()) {
                 throw new IncompleteWorkflowException(problems);
             }

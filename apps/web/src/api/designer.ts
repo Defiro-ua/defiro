@@ -14,6 +14,12 @@ export type StoredDraft = Draft & {
 /** A type of step in the palette: a plugin of the Registry's catalogue */
 export type StepType = { name: string; version: string; outcomes: string[] }
 
+/** Who can make a request or handle a step, with a note on where it comes from (UC05) */
+export type GroupOption = { name: string; note: string }
+
+/** The cards of «Quem pode pedir» and of «Quem trata este passo?», from the organization's directory */
+export type GroupChoices = { requesters: GroupOption[]; handlers: GroupOption[] }
+
 export type Publication = { published: true; version: number } | { published: false; problems: Problem[] }
 
 export type Loading = { loaded: true; draft: StoredDraft } | { loaded: false; why: string }
@@ -29,6 +35,8 @@ async function json<T>(method: 'GET' | 'POST' | 'PUT', url: string, body?: unkno
 export const listDrafts = () => json<StoredDraft[]>('GET', DRAFTS)
 
 export const listStepTypes = () => json<StepType[]>('GET', '/api/designer/step-types')
+
+export const listGroups = () => json<GroupChoices>('GET', '/api/designer/groups')
 
 export const startDraft = (name: string) => json<StoredDraft>('POST', DRAFTS, { name })
 
