@@ -20,7 +20,8 @@ class StepContextTest {
             "chefias",
             5,
             List.of("Incorrectly filled"),
-            List.of("Trip not authorised"));
+            List.of("Trip not authorised"),
+            List.of());
     static final Person ANA = new Person("ana", "Ana Ferreira", "Técnica Superior", "Obras Municipais", "Rui Matos");
     static final Person RUI = new Person("rui", "Rui Matos", "Chefe de Divisão", "Obras Municipais", null);
     final UUID procedure = UUID.randomUUID();
