@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon'
 import { cx } from '../lib/cx'
 import { focusSoon } from '../lib/focus'
 import { describedBy, textareaClass } from '../lib/formStyles'
+import { DATES_REASON } from './certificateDates'
 import { LONGEST } from './FieldNotes'
 
 export type EndKind = 'devolver' | 'rejeitar'
@@ -17,6 +18,8 @@ type Props = {
   rejectReasons: string[]
   /** How many notes the reviewer left: they go with a return */
   notes: number
+  /** What «Datas do certificado não coincidem» writes in the message, or nothing */
+  datesMessage: string
   busy: boolean
   onDecide: (kind: EndKind, why: Why) => void
 }
@@ -27,10 +30,10 @@ const label = { devolver: 'Devolver para correção', rejeitar: 'Rejeitar o pedi
  * Returning and rejecting (UC18), as in the prototype: two buttons, each opening its own list of
  * reasons and the message. Both are always there: rejecting is always possible (Pedro, 2026-11-23).
  */
-export function EndMenus({ requester, returnReasons, rejectReasons, notes, busy, onDecide }: Props) {
+export function EndMenus({ requester, returnReasons, rejectReasons, notes, datesMessage, busy, onDecide }: Props) {
   const [menu, setMenu] = useState<EndKind | null>(null)
   const toggle = (kind: EndKind) => setMenu((open) => (open === kind ? null : kind))
-  const common = { requester, notes, busy, onDecide }
+  const common = { requester, notes, datesMessage, busy, onDecide }
   return (
     <>
       <EndMenu kind="devolver" reasons={returnReasons} open={menu === 'devolver'} onToggle={() => toggle('devolver')} {...common} />
@@ -44,10 +47,10 @@ type MenuProps = {
   reasons: string[]
   open: boolean
   onToggle: () => void
-} & Pick<Props, 'requester' | 'notes' | 'busy' | 'onDecide'>
+} & Pick<Props, 'requester' | 'notes' | 'datesMessage' | 'busy' | 'onDecide'>
 
 // What is chosen and written stays while the menu is closed
-function EndMenu({ kind, reasons, open, onToggle, requester, notes, busy, onDecide }: MenuProps) {
+function EndMenu({ kind, reasons, open, onToggle, requester, notes, datesMessage, busy, onDecide }: MenuProps) {
   const [chosen, setChosen] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [wrong, setWrong] = useState<'reasons' | 'message' | null>(null)
@@ -143,6 +146,7 @@ function EndMenu({ kind, reasons, open, onToggle, requester, notes, busy, onDeci
                     checked={on}
                     onChange={() => {
                       setChosen((all) => (on ? all.filter((x) => x !== reason) : [...all, reason]))
+                      if (!on && reason === DATES_REASON && !message.trim()) setMessage(datesMessage)
                       setWrong(null)
                     }}
                     className="m-0 size-5.5 shrink-0 accent-orange"

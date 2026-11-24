@@ -36,6 +36,7 @@ import {
   returnFailed,
   type ReviewState,
 } from '../review/notices'
+import { datesMessage } from '../review/certificateDates'
 import { EndMenus, type EndKind, type Why } from '../review/EndMenus'
 import { FieldNotes } from '../review/FieldNotes'
 import { useArrival } from '../review/useArrival'
@@ -311,6 +312,7 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
                   returnReasons={r.path[current]?.returnReasons ?? []}
                   rejectReasons={r.path[current]?.rejectReasons ?? []}
                   notes={Object.keys(notes).length}
+                  datesMessage={datesMessage(r.answers)}
                   busy={busy}
                   onDecide={(kind, why) => endIt(r.task as string, kind, why)}
                 />

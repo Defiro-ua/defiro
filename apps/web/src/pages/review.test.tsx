@@ -52,7 +52,13 @@ const request: ReviewRequest = {
       returnReasons: ['Preenchido incorretamente', 'Falta documento comprovativo'],
       rejectReasons: ['Despesa não elegível'],
     },
-    { id: 's4', name: 'Validação final', handledBy: 'RH · Formação', returnReasons: [], rejectReasons: ['Fora do prazo legal'] },
+    {
+      id: 's4',
+      name: 'Validação final',
+      handledBy: 'RH · Formação',
+      returnReasons: ['Datas do certificado não coincidem'],
+      rejectReasons: ['Fora do prazo legal'],
+    },
   ],
   version: 1,
   requester: { name: 'Ana Ferreira', jobTitle: 'Técnica Superior', unit: 'Divisão de Obras Municipais', manager: 'Rui Matos' },
@@ -619,6 +625,55 @@ describe('returning and rejecting (UC18)', () => {
     expect(api.reject).toHaveBeenCalledWith('t1', { reasons: ['Fora do prazo legal'], message: 'Mensagem de rejeição' })
     expect(await screen.findByText('Pedido rejeitado')).toBeInTheDocument()
     expect(screen.getByText('Motivo: Fora do prazo legal.')).toBeInTheDocument()
+  })
+
+  describe('«Datas do certificado não coincidem»', () => {
+    const answer = (field: string, label: string, value: string) => ({ field, label, value, changed: false, previous: null })
+    const atTheEnd = (certificate: string): Partial<ReviewRequest> => ({
+      currentStep: 's4',
+      answers: [
+        answer('partida', 'Partida', '08/11/2026 07:30'),
+        answer('regresso', 'Regresso', '10/11/2026 19:40'),
+        answer('cert', 'Datas do certificado', certificate),
+      ],
+    })
+    const dates =
+      'O certificado indica 08/11/2026 a 09/11/2026 e a deslocação foi de 08/11/2026 a 10/11/2026. Junte o certificado correto ou corrija as datas da deslocação.'
+    const tick = (m: ReturnType<typeof menu>) => userEvent.click(m.getByRole('checkbox', { name: 'Datas do certificado não coincidem' }))
+
+    it('fills in the message with the dates that do not match', async () => {
+      const m = await open('Devolver para correção', atTheEnd('08/11/2026 a 09/11/2026'))
+      await tick(m)
+      expect(m.getByRole('textbox')).toHaveValue(dates)
+    })
+
+    it('keeps what the reviewer already wrote', async () => {
+      const m = await open('Devolver para correção', atTheEnd('08/11/2026 a 09/11/2026'))
+      await userEvent.type(m.getByRole('textbox'), message)
+      await tick(m)
+      expect(m.getByRole('textbox')).toHaveValue(message)
+    })
+
+    it('fills in nothing when the reason is unticked', async () => {
+      const m = await open('Devolver para correção', atTheEnd('08/11/2026 a 09/11/2026'))
+      await tick(m)
+      await userEvent.clear(m.getByRole('textbox'))
+      await tick(m)
+      expect(m.getByRole('textbox')).toHaveValue('')
+    })
+
+    it('another reason fills in nothing', async () => {
+      // The same dates, at a step with other reasons
+      const m = await open('Devolver para correção', { ...atTheEnd('08/11/2026 a 09/11/2026'), currentStep: 's2' })
+      await userEvent.click(m.getByRole('checkbox', { name: 'Preenchido incorretamente' }))
+      expect(m.getByRole('textbox')).toHaveValue('')
+    })
+
+    it('fills in nothing when the dates match', async () => {
+      const m = await open('Devolver para correção', atTheEnd('08/11/2026 a 10/11/2026'))
+      await tick(m)
+      expect(m.getByRole('textbox')).toHaveValue('')
+    })
   })
 
   it('counts the message and stops at 1000 characters', async () => {
