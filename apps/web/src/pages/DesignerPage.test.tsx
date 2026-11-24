@@ -309,6 +309,20 @@ describe('creating a workflow', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Como se chama o workflow?')
   })
 
+  it('says so when the workflow cannot be created, and stays on the review', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(stored('Ajudas de custo', reviewStep('a', 'Validação da chefia')))
+    vi.mocked(api.publishDraft).mockRejectedValue(new Error('POST answered 500'))
+    const user = open('/workflows/criar/d1?ecra=rever')
+    await question()
+
+    await user.click(screen.getByRole('button', { name: 'Criar workflow' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Não foi possível criar o workflow. Tente outra vez.')
+    await waitFor(() => expect(document.activeElement).toBe(alert))
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Confira o workflow antes de o criar')
+  })
+
   it('says so when the draft no longer exists', async () => {
     vi.mocked(api.loadDraft).mockResolvedValue(null)
     open('/workflows/criar/gone')
