@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
-import { listStepTypes, loadDraft, publishDraft, saveDraft, startDraft, type StepType } from '../api/designer'
+import { listStepTypes, loadDraft, publishDraft, saveDraft, startDraft, type Publication, type StepType } from '../api/designer'
 import { IconButton } from '../components/Button'
 import { Chip } from '../components/Chip'
 import { ArrowHint, FieldError, Req, StepError, WizardFooter } from '../components/form'
@@ -98,7 +98,8 @@ function Designer({ id, draft: first, types }: Loaded) {
   const [tried, setTried] = useState<ReadonlySet<string>>(new Set())
   const [triedAll, setTriedAll] = useState(false)
   const [refused, setRefused] = useState<Problem[]>([])
-  const [saveFailed, setSaveFailed] = useState(false)
+  /** What could not reach the Designer: saving an answer or creating the workflow */
+  const [failed, setFailed] = useState('')
 
   const steps = draft.steps
   const request = steps[0]
@@ -141,7 +142,7 @@ function Designer({ id, draft: first, types }: Loaded) {
     setView(screen)
     if (opts.volta !== undefined) setVolta(opts.volta)
     if (opts.fromReview !== undefined) setFromReview(opts.fromReview)
-    setSaveFailed(false)
+    setFailed('')
     focusSoon(opts.focus || 'passo-titulo')
   }
   const fieldOf = (s: Step) => `steps[${steps.indexOf(s)}]`
@@ -151,7 +152,7 @@ function Designer({ id, draft: first, types }: Loaded) {
       await saveDraft(id, draft)
       return true
     } catch {
-      setSaveFailed(true)
+      setFailed('Não foi possível guardar o rascunho. Tente outra vez.')
       focusSoon('passo-erro')
       return false
     }
@@ -193,7 +194,14 @@ function Designer({ id, draft: first, types }: Loaded) {
       return
     }
     if (!(await save())) return
-    const publication = await publishDraft(id)
+    let publication: Publication
+    try {
+      publication = await publishDraft(id)
+    } catch {
+      setFailed('Não foi possível criar o workflow. Tente outra vez.')
+      focusSoon('passo-erro')
+      return
+    }
     if (!publication.published) {
       setRefused(publication.problems)
       setTriedAll(true)
@@ -274,7 +282,7 @@ function Designer({ id, draft: first, types }: Loaded) {
   const screenProblems = visible.filter((p) => (listScreen ? tried.has(kind) : true) && answers(screenOf(p.field)))
   const incomplete = kind === 'percurso' && tried.has('percurso') ? decisions.filter((s) => !complete(s)) : []
   let stepError = ''
-  if (saveFailed) stepError = 'Não foi possível guardar o rascunho. Tente outra vez.'
+  if (failed) stepError = failed
   else if (kind === 'rever' && triedAll && problems.length)
     stepError =
       problems.length === 1
