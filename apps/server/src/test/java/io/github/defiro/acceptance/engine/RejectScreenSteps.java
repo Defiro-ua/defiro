@@ -69,6 +69,34 @@ public class RejectScreenSteps {
         confirm().click();
     }
 
+    @When("he confirms it for {string} with the message {string}")
+    public void heConfirmsItWith(String reason, String message) {
+        tick(reason);
+        message().fill(message);
+        confirm().click();
+    }
+
+    @When("she ticks {string}")
+    public void sheTicks(String reason) {
+        tick(reason);
+    }
+
+    @Then("the message reads «{}»")
+    public void theMessageReads(String text) {
+        assertThat(message()).hasValue(text);
+    }
+
+    @Then("he is asked for the reasons and the message, and for no signature")
+    public void heIsAskedForNoSignature() {
+        // Everything there is to fill in or press in the menu
+        Locator controls = menu(button).locator("input, textarea, select, button, a");
+        assertThat(controls).hasCount(checkboxes().count() + 3);
+        assertThat(message()).hasCount(1);
+        assertThat(confirm()).hasCount(1);
+        assertThat(menu(button).getByText("Cancelar")).hasCount(1);
+        assertThat(menu(button)).not().containsText(Pattern.compile("assin", Pattern.CASE_INSENSITIVE));
+    }
+
     @Then("he sees the error «{}»")
     public void heSeesTheError(String text) {
         assertThat(menu(button).getByText(text, new Locator.GetByTextOptions().setExact(true)))
@@ -141,7 +169,7 @@ public class RejectScreenSteps {
     private void decide(String person, String reference, String button, String reasons, String message) {
         opened(person, button, reference);
         RequestSteps.reasons(reasons).forEach(this::tick);
-        menu(button).getByRole(AriaRole.TEXTBOX).fill(message);
+        message().fill(message);
         confirm().click();
         screen.page().waitForURL("**/caixa-de-tarefas");
     }
@@ -176,6 +204,10 @@ public class RejectScreenSteps {
                         AriaRole.CHECKBOX,
                         new Locator.GetByRoleOptions().setName(reason).setExact(true))
                 .check();
+    }
+
+    private Locator message() {
+        return menu(button).getByRole(AriaRole.TEXTBOX);
     }
 
     private Locator confirm() {

@@ -8,7 +8,9 @@
 #   mockup), and Segunda Chefia, as in UC17.
 # open question (Candeias, UC03): a step can be published with reasons of one kind only. Rejecting is
 #                always possible (Pedro, 2026-11-23): should each step need reasons of both kinds?
-# Criterion 9 (rejecting needs no signature): signatures are outside the MVP, so nothing here signs.
+# open question (Candeias, UC04; Dinis, UC13; Bernardo, UC22): the dates of criterion 6 are found by
+#                the labels of their answers, «Datas do certificado», «Partida» and «Regresso», since
+#                the form has no type for a certificate's dates. Is there a better way to know them?
 @UC18 @wip
 Feature: Reject a document
   As a Reviewer,
@@ -23,6 +25,8 @@ Feature: Reject a document
       | Ana Ferreira   | Divisão de Obras Municipais | Técnica Superior              | Rui Matos    | Todos os trabalhadores, Divisão de Obras Municipais          |
       | Rui Matos      | Divisão de Obras Municipais | Chefe de Divisão              | Helena Costa | Todos os trabalhadores, Chefias, Divisão de Obras Municipais |
       | Segunda Chefia | Divisão de Obras Municipais | Chefe de Divisão              | Helena Costa | Todos os trabalhadores, Chefias, Divisão de Obras Municipais |
+      | Carla Dias     | Divisão Financeira          | Técnica da Divisão Financeira | Rui Matos    | Todos os trabalhadores, Divisão Financeira                   |
+      | Joana Pires    | Recursos Humanos            | Técnica de Recursos Humanos   | Rui Matos    | Todos os trabalhadores, Recursos Humanos, RH · Formação      |
     And the workflow "Ajudas de custo" has the path
       | step                   | handled by                       | reasons to return                                                                      | reasons to reject                              |
       | Pedido                 | Todos os trabalhadores           |                                                                                        |                                                |
@@ -148,13 +152,16 @@ Feature: Reject a document
       When he confirms it for "Preenchido incorretamente" with no message
       Then he sees the error «Diga a Ana o que tem de corrigir: escreva a mensagem ou deixe uma nota no campo.»
 
-  # Left for UC22 (Bernardo), whose step is the only one with this reason (Pedro, 2026-11-23).
-  @browser @wip
+  @browser
   Rule: Choosing «Datas do certificado não coincidem» fills in the message with the dates that do not match
+    # Only «Validação final» has this reason. The rest of that step's screen is UC22 (Bernardo).
+    # What the reviewer already wrote is kept, and dates that match fill in nothing.
 
     Scenario: The message says the dates
-      Given the request is at "Validação final"
-      When the reviewer ticks "Datas do certificado não coincidem"
+      Given Rui Matos approved the request "AC-2026-0147"
+      And Carla Dias approved it at "Verificação financeira"
+      And Joana Pires opened «Devolver para correção» on the request "AC-2026-0147"
+      When she ticks "Datas do certificado não coincidem"
       Then the message reads «O certificado indica 08/11/2026 a 09/11/2026 e a deslocação foi de 08/11/2026 a 10/11/2026. Junte o certificado correto ou corrija as datas da deslocação.»
 
   Rule: The notice reads «Pedido devolvido para correção» or «Pedido rejeitado», with «Desfazer»
@@ -247,3 +254,13 @@ Feature: Reject a document
         | decided  | reason                    | message                                                      | state                                                          |
         | returned | Preenchido incorretamente | Corrija a data de regresso e junte o certificado, por favor. | Devolvido para correção por Rui Matos, Chefe de Divisão.        |
         | rejected | Fora do prazo legal       | Mensagem de rejeição                                         | Rejeitado por Rui Matos, Chefe de Divisão: Fora do prazo legal. |
+
+  @browser
+  Rule: Rejecting needs no signature
+    # Signatures are outside the MVP.
+
+    Scenario: Rejecting asks for the reasons and the message only
+      Given Rui Matos opened «Rejeitar o pedido» on the request "AC-2026-0147"
+      Then he is asked for the reasons and the message, and for no signature
+      When he confirms it for "Fora do prazo legal" with the message "Mensagem de rejeição"
+      Then he is back on his inbox with the notice «Pedido rejeitado»
