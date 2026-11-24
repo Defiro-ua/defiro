@@ -210,6 +210,24 @@ class WorkflowDraftTest {
                         new Transition(last, "rejected", null));
     }
 
+    @Test
+    void aWorkflowFileGivesBackTheDraftItWasMadeFrom() {
+        WorkflowDraft draft = withSteps(complete("Validação da chefia"), finalValidation());
+
+        assertThat(WorkflowDraft.from(draft.specification(OUTCOMES::get))).isEqualTo(draft);
+    }
+
+    @Test
+    void theTransitionsOfAFileAreMadeAgainFromThePath() {
+        WorkflowDraft draft = withSteps(complete("Validação da chefia"));
+        WorkflowSpecification file = draft.specification(OUTCOMES::get);
+        WorkflowSpecification edited = new WorkflowSpecification(
+                file.schemaVersion(), file.name(), file.steps(), List.of(new Transition("x", "approved", "y")));
+
+        assertThat(WorkflowDraft.from(edited).specification(OUTCOMES::get).transitions())
+                .isEqualTo(file.transitions());
+    }
+
     /** "Ajudas de custo": the request, then these steps. */
     static WorkflowDraft withSteps(Step... steps) {
         return named("Ajudas de custo", steps);

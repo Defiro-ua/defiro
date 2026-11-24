@@ -34,6 +34,25 @@ record WorkflowDraft(String name, List<Step> steps) {
         return new WorkflowDraft(name, List.of(request));
     }
 
+    /**
+     * The draft a workflow file describes: its name and its path, step by step, as it was. The
+     * transitions are not read: publishing makes them again from the order of the path, so a file
+     * cannot send a request anywhere the path does not.
+     */
+    static WorkflowDraft from(WorkflowSpecification file) {
+        List<Step> path = file.steps().stream()
+                .map(step -> new Step(
+                        step.id(),
+                        step.plugin(),
+                        step.name(),
+                        step.handledBy(),
+                        step.deadline(),
+                        step.returnReasons(),
+                        step.rejectReasons()))
+                .toList();
+        return new WorkflowDraft(file.name(), path);
+    }
+
     /** Every missing or invalid answer, in the order the Workflow Manager meets them. */
     List<Problem> problems(Set<PluginRef> catalogue) {
         List<Problem> problems = new ArrayList<>();

@@ -3,7 +3,9 @@ package io.github.defiro.acceptance.designer;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.AriaRole;
+import com.microsoft.playwright.options.FilePayload;
 import io.github.defiro.acceptance.WebBrowser;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 /**
@@ -86,6 +88,23 @@ final class DesignerScreen implements AutoCloseable {
     /** The steps of the path: on the path screen, or «O percurso até agora» beside a step's screen */
     Locator path() {
         return page.locator("ol[aria-label='Passos do percurso'] h3, aside li");
+    }
+
+    /** In «Workflows», «Carregar ficheiro» with this file: the designer opens it to review */
+    void loadWorkflowFile(String json) {
+        page.navigate("/workflows");
+        page.getByLabel("Carregar ficheiro")
+                .setInputFiles(
+                        new FilePayload("workflow.json", "application/json", json.getBytes(StandardCharsets.UTF_8)));
+        question().waitFor();
+    }
+
+    /** The entry of a workflow in «Workflows», once there */
+    Locator workflow(String name) {
+        page.waitForURL("**/workflows");
+        return page.getByRole(AriaRole.LIST, new Page.GetByRoleOptions().setName("Workflows"))
+                .getByRole(AriaRole.LISTITEM)
+                .filter(new Locator.FilterOptions().setHasText(name));
     }
 
     private Locator button(String name) {

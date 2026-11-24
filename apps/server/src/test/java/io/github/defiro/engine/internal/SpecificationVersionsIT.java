@@ -26,9 +26,6 @@ class SpecificationVersionsIT {
     Deployment deployment;
 
     @Autowired
-    SpecificationVersions versions;
-
-    @Autowired
     JdbcClient jdbc;
 
     final UUID draft = UUID.randomUUID();
@@ -70,7 +67,7 @@ class SpecificationVersionsIT {
         deployment.deploy(first, new Publication("sofia.almeida", draft, 1));
         deployment.deploy(specification("Ajudas de custo e transporte"), new Publication("sofia.almeida", draft, 2));
 
-        assertThat(versions.find(draft, 1)).contains(first);
+        assertThat(deployment.version(draft, 1)).contains(first);
     }
 
     @Test
@@ -83,7 +80,7 @@ class SpecificationVersionsIT {
                         .update())
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("Uma versão publicada nunca muda");
-        assertThat(versions.find(draft, 1)).contains(specification("Ajudas de custo"));
+        assertThat(deployment.version(draft, 1)).contains(specification("Ajudas de custo"));
     }
 
     @Test
@@ -95,7 +92,15 @@ class SpecificationVersionsIT {
                         .update())
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("Uma versão publicada nunca muda");
-        assertThat(versions.find(draft, 1)).isPresent();
+        assertThat(deployment.version(draft, 1)).isPresent();
+    }
+
+    @Test
+    void aVersionNeverDeployedIsNotFound() {
+        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+
+        assertThat(deployment.version(draft, 2)).isEmpty();
+        assertThat(deployment.version(UUID.randomUUID(), 1)).isEmpty();
     }
 
     static WorkflowSpecification specification(String name) {
