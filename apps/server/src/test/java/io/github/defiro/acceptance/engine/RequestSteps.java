@@ -136,6 +136,11 @@ public class RequestSteps {
         attached.put(filename, content);
     }
 
+    @Given("{person} corrected {string} to {string} and attached {string}, resubmitting it as version {int}")
+    public void correctedAndResubmittedIt(String person, String field, String answer, String filename, int version) {
+        correctedAndResubmitted(person, field, answer, filename, reference, version);
+    }
+
     @Given("with the files {string} and {string}")
     public void withTheFiles(String file, String otherFile) {
         attach(file);

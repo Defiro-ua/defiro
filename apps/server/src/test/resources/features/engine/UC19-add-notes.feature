@@ -4,7 +4,8 @@
 #
 # Stand-ins, as in UC17: UC13 (the request is created by a test step), UC15 (temporary file store),
 # UC27 (minimal inbox). A reviewer's notes are the document of their review step (team diagram).
-# Rules 4 and 5 need «Devolver para correção» (UC18): they stay @wip until UC18 is merged.
+# Criteria 4 and 5 use «Devolver para correção» (UC18).
+# PLACEHOLDER, to revisit: «Mensagem de rejeição» (UC18), and Segunda Chefia, as in UC17.
 # open question (Dinis, Candeias): a note is on a field of the request ({field} of the answers) or
 #                on a file. Does that key fit the form fields of UC04 and the correction of UC20?
 @UC19 @wip
@@ -22,12 +23,13 @@ Feature: Add notes to a document
       | Rui Matos      | Divisão de Obras Municipais | Chefe de Divisão              | Helena Costa | Todos os trabalhadores, Chefias, Divisão de Obras Municipais |
       | Segunda Chefia | Divisão de Obras Municipais | Chefe de Divisão              | Helena Costa | Todos os trabalhadores, Chefias, Divisão de Obras Municipais |
       | Carla Dias     | Divisão Financeira          | Técnica da Divisão Financeira | Rui Matos    | Todos os trabalhadores, Divisão Financeira                   |
+    # The reasons of «Validação da chefia» are UC18's, from the prototype.
     And the workflow "Ajudas de custo" has the path
-      | step                   | handled by                       |
-      | Pedido                 | Todos os trabalhadores           |
-      | Validação da chefia    | Chefias da unidade do requerente |
-      | Verificação financeira | Divisão Financeira               |
-      | Validação final        | RH · Formação                    |
+      | step                   | handled by                       | reasons to return                                       | reasons to reject                              |
+      | Pedido                 | Todos os trabalhadores           |                                                         |                                                |
+      | Validação da chefia    | Chefias da unidade do requerente | Preenchido incorretamente; Falta documento comprovativo | Deslocação não autorizada; Fora do prazo legal |
+      | Verificação financeira | Divisão Financeira               |                                                         |                                                |
+      | Validação final        | RH · Formação                    |                                                         |                                                |
     And Ana Ferreira submitted the request "AC-2026-0147" for "Ajudas de custo" with
       | field                | answer                          |
       | Motivo               | Formação                        |
@@ -171,8 +173,6 @@ Feature: Add notes to a document
       Then his note on "Regresso" can be changed again
       And Carla Dias no longer sees it
 
-  # Needs «Devolver para correção» (UC18): it turns on with UC18.
-  @wip
   Rule: Notes go to the requester together with a return
     # Only the notes of who returns the request: the notes that followed an approval stay between
     # reviewers. A rejection sends no notes: the requester sees its reasons and message (UC18).
@@ -181,20 +181,24 @@ Feature: Add notes to a document
       Given Rui Matos left the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Datas do certificado"
 
     Scenario: The returned request carries the reviewer's notes
-      When Rui Matos returns the request "AC-2026-0147" for "Preenchido incorretamente"
+      When Rui Matos returns the request "AC-2026-0147" for "Preenchido incorretamente" with the message ""
       Then Ana Ferreira gets the note on "Datas do certificado"
 
     Scenario: A rejected request carries no notes
-      When Rui Matos rejects the request "AC-2026-0147"
+      When Rui Matos rejects the request "AC-2026-0147" for "Fora do prazo legal" with the message "Mensagem de rejeição"
       Then Ana Ferreira gets no notes
 
-  # Needs «Devolver para correção» (UC18): it turns on with UC18.
-  @wip
+    Scenario: Once undone, the return carries them no more
+      Given Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente" with the message "Corrija a data de regresso e junte o certificado, por favor."
+      When he undoes his decision
+      Then Ana Ferreira gets no notes
+
   Rule: The requester sees each note next to its field, with the reviewer's name and job title
     # On the returned request. The correction screen with «Ir para o campo» is UC20 (Dinis).
 
     @browser
     Scenario: Ana reads Rui's note next to the field
-      Given Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente", with the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Datas do certificado"
+      Given Rui Matos left the note "Falta o certificado de presença com o carimbo da entidade formadora." on "Datas do certificado"
+      And Rui Matos returned the request "AC-2026-0147" for "Preenchido incorretamente" with the message ""
       When Ana Ferreira opens her request "AC-2026-0147"
       Then next to "Datas do certificado" she reads «Nota de Rui Matos, Chefe de Divisão: Falta o certificado de presença com o carimbo da entidade formadora.»

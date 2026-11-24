@@ -1,6 +1,7 @@
 package io.github.defiro.acceptance.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -125,6 +126,22 @@ public class NoteSteps {
             assertThat(seen.statusCode()).isEqualTo(200);
             assertThat(seen.jsonPath().getList("notesFrom")).isEmpty();
         }
+    }
+
+    @Then("{person} gets the note on {string}")
+    public void getsTheNoteOn(String person, String label) {
+        List<Map<String, Object>> from = review.requestSeenBy(person).getList("notesFrom");
+        assertThat(from)
+                .extracting(note -> note.get("field"), note -> note.get("author"))
+                .containsExactly(tuple(RequestSteps.fieldOf(label), "Rui Matos, Chefe de Divisão"));
+    }
+
+    @Then("{person} gets no notes")
+    public void getsNoNotes(String person) {
+        assertThat(review.lastResponse().statusCode())
+                .as("what was done before")
+                .isEqualTo(200);
+        assertThat(review.requestSeenBy(person).getList("notesFrom")).isEmpty();
     }
 
     private void put(String person, String field, String text) {

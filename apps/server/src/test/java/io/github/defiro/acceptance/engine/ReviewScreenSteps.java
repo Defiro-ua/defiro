@@ -71,6 +71,37 @@ public class ReviewScreenSteps {
         page.waitForURL("**/caixa-de-tarefas");
     }
 
+    @When("{person} approves the request {string} from his inbox, after seeing what changed")
+    public void approvesAfterSeeingWhatChanged(String person, String reference) {
+        // Still signed in, since they returned it
+        page.navigate("/caixa-de-tarefas");
+        rever(reference).click();
+        assertThat(rowOf("Regresso")).containsText("09/11/2026 19:10");
+        assertThat(rowOf("Regresso")).containsText("Alterado");
+        assertThat(rowOf("Regresso")).containsText("Antes: 10/11/2026 19:40");
+        assertThat(page.getByText("Novo na versão 2")).isVisible();
+        button("Aprovar").click();
+    }
+
+    @Then("he is back on his inbox with the notice «{}»")
+    public void heIsBackOnHisInbox(String text) {
+        assertThat(page).hasURL(Pattern.compile(".*/caixa-de-tarefas$"));
+        assertThat(notice(text)).isVisible();
+    }
+
+    @Then("next to {string} she reads «{}»")
+    public void nextToSheReads(String label, String text) {
+        assertThat(rowOf(label)).containsText(text);
+    }
+
+    // An answer of «Dados do pedido», with all that is next to it
+    private Locator rowOf(String label) {
+        return page.getByRole(AriaRole.REGION, new Page.GetByRoleOptions().setName("Dados do pedido"))
+                .locator("dl > div")
+                .filter(new Locator.FilterOptions()
+                        .setHas(page.locator("dt").getByText(label, new Locator.GetByTextOptions().setExact(true))));
+    }
+
     @Given("{person} approved the request {string} from his inbox")
     public void approvedFromTheInbox(String person, String reference) {
         approvesFromTheInbox(person, reference);

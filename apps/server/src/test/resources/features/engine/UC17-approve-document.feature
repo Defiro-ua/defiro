@@ -32,11 +32,11 @@ Feature: Approve a document
       | Sofia Almeida  | Modernização Administrativa | Gestora de workflows          | Rui Matos    | Todos os trabalhadores                                       |
       | Luísa Prata    | Divisão de Ambiente         | Chefe de Divisão              |              | Todos os trabalhadores, Chefias, Divisão de Ambiente         |
     And the workflow "Ajudas de custo" has the path
-      | step                   | handled by                       |
-      | Pedido                 | Todos os trabalhadores           |
-      | Validação da chefia    | Chefias da unidade do requerente |
-      | Verificação financeira | Divisão Financeira               |
-      | Validação final        | RH · Formação                    |
+      | step                   | handled by                       | reasons to return         |
+      | Pedido                 | Todos os trabalhadores           |                           |
+      | Validação da chefia    | Chefias da unidade do requerente | Preenchido incorretamente |
+      | Verificação financeira | Divisão Financeira               |                           |
+      | Validação final        | RH · Formação                    |                           |
     # The mockup gives its dates relative to the day it is opened (Partida 14 days before, at 07:30;
     #   Regresso 12 days before, at 19:40; corrected to 13 days before, at 19:10; the certificate's
     #   dates 14 and 13 days before). They are fixed here from 22/11/2026, the day this draft was
@@ -245,9 +245,8 @@ Feature: Approve a document
         | Rui Matos, Chefe de Divisão, aprovou o passo «Validação da chefia» |
 
   # The browser journey of UC17 in the QA Strategy, with the return and correction of the mockup.
-  # It turns on (@wip off) when UC18 (return) and UC19 (notes) are merged; «Ana corrects and
-  # resubmits» stays a test step until UC20 (Dinis).
-  @browser @wip
+  # «Ana corrects and resubmits» stays a test step until UC20 (Dinis).
+  @browser
   Rule: Journey: Rui returns with a note, Ana corrects, Rui approves
 
     Scenario: A returned request comes back corrected and is approved

@@ -167,7 +167,7 @@ public class ReviewSteps {
         assertThat(inboxOf(person)).contains(reference);
     }
 
-    @Then("the request is still at {string}")
+    @Then("the request is (still )at {string}")
     public void theRequestIsStillAt(String step) {
         assertThat(currentStep()).isEqualTo(step);
     }
@@ -348,7 +348,7 @@ public class ReviewSteps {
 
     // The request as its requester sees it: they always take part in it.
     private JsonPath requestAs(String person) {
-        Response request = people.of(person).request().get(PROCEDURES + reference);
+        Response request = people.of(person).request().get(PROCEDURES + requests.reference());
         assertThat(request.statusCode()).isEqualTo(200);
         return request.jsonPath();
     }

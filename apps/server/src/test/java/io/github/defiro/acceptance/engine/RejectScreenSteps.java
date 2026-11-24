@@ -95,6 +95,18 @@ public class RejectScreenSteps {
         decide(person, reference, REJECT, reasons, message);
     }
 
+    // The journey of UC17, all on the reviewer's screen
+
+    @Given("{person} returned the request {string} for {string}, with the note {string} on {string}")
+    public void returnedWithANote(String person, String reference, String reasons, String note, String label) {
+        screen.onHisScreenLeavesTheNote(person, note, label);
+        screen.heSeesTheNotice("Nota guardada");
+        open(RETURN);
+        RequestSteps.reasons(reasons).forEach(this::tick);
+        confirm().click();
+        screen.heSeesTheNotice("Pedido devolvido para correção");
+    }
+
     @Then("the notice shows «{}»")
     public void theNoticeShows(String text) {
         Locator shown = screen.notice(text);
