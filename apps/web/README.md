@@ -14,8 +14,10 @@ npm run dev
 ```
 
 O `npm run dev` passa `/api`, `/oauth2`, `/login/oauth2` e `/logout` ao servidor em `http://localhost:8080`
-(outro endereço: `DEFIRO_SERVER=http://… npm run dev`). A imagem Docker faz o mesmo no nginx, com a variável de
-ambiente `DEFIRO_SERVER`.
+(outro endereço: `DEFIRO_SERVER=http://… npm run dev`). O cabeçalho `Host` vai tal como o browser o mandou
+(`changeOrigin: false`), para o servidor construir o regresso do fornecedor de identidade para este endereço. A imagem
+Docker faz o mesmo no nginx, com a variável de ambiente `DEFIRO_SERVER` e os cabeçalhos `X-Forwarded-Host` e
+`X-Forwarded-Proto`.
 
 Precisa do Node indicado em `.nvmrc`. O `.npmrc` não corre scripts de instalação e recusa pacotes publicados há
 menos de 7 dias.

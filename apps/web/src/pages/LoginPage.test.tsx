@@ -24,7 +24,7 @@ describe('LoginPage', () => {
 
     const entrar = screen.getAllByRole('link', { name: 'Entrar' })
     expect(entrar).toHaveLength(1)
-    expect(entrar[0]).toHaveAttribute('href', '/oauth2/authorization/entra')
+    expect(entrar[0]).toHaveAttribute('href', '/oauth2/authorization/oidc')
     expect(screen.queryByRole('button', { name: 'Entrar' })).not.toBeInTheDocument()
   })
 
@@ -38,6 +38,17 @@ describe('LoginPage', () => {
     renderAt('/?aviso=sessao-terminada')
 
     expect(await within(screen.getByRole('status')).findByText('Sessão terminada')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['entrada-falhada', 'Não foi possível entrar', 'Tente outra vez daqui a pouco.'],
+    ['conta-inativa', 'A sua conta está inativa', 'Fale com os serviços informáticos da sua organização.'],
+  ])('shows why the sign-in did not work (%s)', async (aviso, title, text) => {
+    renderAt('/?aviso=' + aviso)
+
+    const status = within(screen.getByRole('status'))
+    expect(await status.findByText(title)).toBeInTheDocument()
+    expect(status.getByText(`. ${text}`)).toBeInTheDocument()
   })
 
   it('takes the notice out of the address, so reloading the page does not show it again', async () => {

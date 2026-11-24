@@ -8,10 +8,11 @@ Feature: Create workflow
 
   Background:
     Given Sofia Almeida is a Workflow Manager
+    And the organization has the groups "Chefias", "Divisão de Obras Municipais", "Divisão Financeira", "Recursos Humanos" and "RH · Formação"
     And she is designing the workflow "Ajudas de custo"
 
   Rule: Only a Workflow Manager can design and create workflows
-    # The role is the app role «Workflow Manager» that UC01 reads from Entra ID.
+    # The role is in defiro's own database, as in UC01.
 
     Scenario: Someone who is not a Workflow Manager cannot start designing a workflow
       Given Ana Ferreira is not a Workflow Manager

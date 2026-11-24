@@ -5,6 +5,8 @@ actor "Requester" as REQ #FBE9D9
 actor "Reviewer" as REV #FBE9D9
 boundary "defiro\nweb app" as WEB
 control "Workflow\nDesigner" as DES
+control "Identity" as IDN
+database "Identity\nstore" as IDB
 database "Designer\nstore" as DDB
 participant "Plugin\nRegistry" as REG
 participantgroup #FFF5E3 **Workflow Engine (runtime)**
@@ -18,13 +20,45 @@ participant "Identity Provider (IdP)\n«system»" as IDP #F0E6CC
 ==1 · Workflow set-up · Workflow Manager (Workflow Designer)==
 
 group UC01 Authenticate (SSO)
-WM->WEB:Open defiro
-WEB-->WM:Redirect to the IdP sign-in page
+WM->WEB:Open defiro, «Entrar»
+WEB->IDN:Start sign-in
+activate IDN
+IDN-->WM:Redirect to the IdP sign-in page\n(state, nonce, PKCE challenge)
+deactivate IDN
 WM->IDP:Sign in with the municipal account
-IDP-->WEB:Redirect back with tokens
-WEB-->WM:Home page (role Workflow Manager)
+IDP-->WM:Redirect back to defiro with a code
+WM->IDN:Code and state
+activate IDN
+IDN->IDP:Exchange the code for tokens\n(client secret, PKCE verifier)
+IDP-->IDN:ID token (iss, sub, name, email, email_verified)
+IDN->IDB:Find the person by (iss, sub)
+alt account not known yet
+IDN->IDB:Link it to the person registered in advance with the verified email,\nor else create a person with no roles and no groups
 end
-note over WEB,ENG:The web app sends the user's access token on every call, and Designer and Engine check it (OIDC).\nCalls between services use the calling service's own token (client credentials).
+alt inactive person
+IDN-->WM:Home page, «A sua conta está inativa»
+else
+IDN->IDB:Update name, email and last sign-in
+IDN-->WM:Task inbox, with the session cookie
+end
+deactivate IDN
+WEB->IDN:Get profile and menu
+activate IDN
+IDN->IDB:Profile, roles and groups
+IDB-->IDN:Person (role Workflow Manager)
+IDN-->WEB:Profile and menu
+deactivate IDN
+end
+note over WEB,IDB:The tokens stay in the server. The browser sends the session cookie on every call, and the CSRF token on every write.\nAt each request the server reads the person's roles, and whether they are active, from the Identity store (cached for 60 s).
+opt «Terminar sessão»
+WM->IDN:Sign out
+activate IDN
+IDN->IDN:End the session in defiro
+IDN-->WM:Redirect to the IdP's end-session page
+deactivate IDN
+WM->IDP:End the session there too
+IDP-->WM:Home page, «Sessão terminada»
+end
 
 group UC03 Create workflow
 WM->WEB:Workflows, Create workflow
@@ -41,11 +75,11 @@ DES-->WEB:Step palette
 deactivate DES
 loop each step (request, manager validation, financial verification, final validation)
 WM->WEB:Add step, choose its type (plugin@version)
-group UC05 Assign a group or unit to each step [include]
-WEB->DES:Get groups and units
+group UC05 Assign a group to each step [include]
+WEB->DES:Get groups
 activate DES
-DES->IDP:Query directory
-IDP-->DES:Groups and units
+DES->IDB:Read the groups' names
+IDB-->DES:Groups
 DES-->WEB:Options
 deactivate DES
 WM->WEB:Choose who handles the step
@@ -78,12 +112,8 @@ DES-->WEB:What is missing
 WEB-->WM:Show what is missing
 else valid
 DES->DES:Build specification\n(schemaVersion, steps, transitions, plugin@version)
-opt no valid service token in cache
-DES->IDP:Get service token (client credentials)
-IDP-->DES:Token that identifies the Designer
-end
-note over DES,ENG:The service token identifies the Designer, not the user.\nOnly the Designer may deploy, so every specification\nthe Engine receives went through validation.
-DES->ENG:Deploy specification\n(service token, publishedBy, draft id, revision)
+note over DES,ENG:Both are modules of the same server: the Designer calls the Engine directly.\nOnly the Designer may deploy, so every specification\nthe Engine receives went through validation.
+DES->ENG:Deploy specification\n(publishedBy: the person's id in defiro, draft id, revision)
 activate ENG
 ENG->DB:Store as a new immutable version\n(same draft id and revision: return the existing version)
 ENG-->DES:Deployed (version 1)
@@ -117,8 +147,8 @@ end
 end
 PM-->ENG:Plugins ready
 deactivate PM
-ENG->IDP:Get profile (name, unit, job, manager)
-IDP-->ENG:Profile
+ENG->IDB:Get profile (name, unit, job, manager)
+IDB-->ENG:Profile
 ENG->DB:Create instance with its own copy of the specification
 note over ENG,DB:Later versions of the workflow only apply to new instances.\nThis instance runs to the end with the copy it keeps.
 ENG->PM:Submission plugin, open step
@@ -147,9 +177,9 @@ WEB-->REQ:Fields to fix
 else valid
 ENG->ENG:Next step, read from the instance's copy
 ENG->PM:Review plugin, enter step (manager validation)
-PM-->ENG:Wait for a person, task for the\nmanagers of the requester's unit
-ENG->IDP:Resolve assignees (managers of the requester's unit)
-IDP-->ENG:Users
+PM-->ENG:Wait for a person, task for the\nrequester's manager
+ENG->IDB:Resolve assignees (the requester's manager)
+IDB-->ENG:People
 ENG->DB:Save instance and data version 1,\ncreate task, log submitted
 ENG-->WEB:Submitted (AC-2026-0147)
 WEB-->REQ:Confirmation and progress
@@ -201,8 +231,8 @@ PM-->ENG:Step done (approved)
 ENG->ENG:Next step, read from the instance's copy
 ENG->PM:Next step's plugin, enter step
 PM-->ENG:Wait for a person (assignee rule)
-ENG->IDP:Resolve assignees
-IDP-->ENG:Users
+ENG->IDB:Resolve assignees (members of the step's group)
+IDB-->ENG:People
 ENG->DB:Create next task, log approved
 ENG-->WEB:Approved
 end
@@ -249,9 +279,9 @@ PM-->ENG:Valid
 ENG->DB:Close task Correct request, save new data version
 ENG->ENG:Next step (manager validation),\nread from the instance's copy
 ENG->PM:Review plugin, enter step
-PM-->ENG:Wait for a person (managers of the requester's unit)
-ENG->IDP:Resolve assignees
-IDP-->ENG:Users
+PM-->ENG:Wait for a person (the requester's manager)
+ENG->IDB:Resolve assignees (the requester's manager)
+IDB-->ENG:People
 ENG->DB:Create task, log resubmitted
 ENG-->WEB:Resubmitted
 deactivate ENG

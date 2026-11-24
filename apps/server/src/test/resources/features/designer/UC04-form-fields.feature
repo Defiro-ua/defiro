@@ -9,6 +9,7 @@ Feature: Define the form fields of each step
 
   Background:
     Given Sofia Almeida is a Workflow Manager
+    And the organization has the groups "Chefias", "Divisão de Obras Municipais", "Divisão Financeira", "Recursos Humanos" and "RH · Formação"
     And she is designing the workflow "Ajudas de custo"
 
   @browser

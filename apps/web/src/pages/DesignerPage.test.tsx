@@ -84,8 +84,8 @@ const goOn = (user: ReturnType<typeof userEvent.setup>) =>
 
 // Not the prototype's list: the cards must be the Designer's, from the organization's directory (UC05)
 const organization = [
-  { name: 'Divisão de Urbanismo', note: 'Unidade do IdP' },
-  { name: 'Divisão Financeira', note: 'Unidade do IdP' },
+  { name: 'Divisão de Urbanismo', note: 'Grupo da organização' },
+  { name: 'Divisão Financeira', note: 'Grupo da organização' },
 ]
 
 beforeEach(() => {
@@ -354,7 +354,7 @@ const asking = (...fields: Field[]): StoredDraft => {
 const questionRows = () =>
   within(screen.getByRole('list', { name: 'Campos do formulário' }))
     .getAllByRole('listitem')
-    .filter((row) => !row.textContent?.includes('Do perfil (IdP)'))
+    .filter((row) => !row.textContent?.includes('Do perfil'))
 const savedFields = () => vi.mocked(api.saveDraft).mock.calls.at(-1)?.[1].steps[0].fields
 
 describe('the request form', () => {
@@ -376,13 +376,14 @@ describe('the request form', () => {
 
     const rows = within(screen.getByRole('list', { name: 'Campos do formulário' })).getAllByRole('listitem')
     expect(rows.slice(0, 3).map((r) => r.textContent)).toEqual([
-      expect.stringMatching(/^1Nome.*Do perfil \(IdP\)/),
-      expect.stringMatching(/^2Unidade orgânica.*Do perfil \(IdP\)/),
-      expect.stringMatching(/^3Chefia direta.*Do perfil \(IdP\)/),
+      expect.stringMatching(/^1Nome.*Do perfil$/),
+      expect.stringMatching(/^2Unidade orgânica.*Do perfil$/),
+      expect.stringMatching(/^3Chefia direta.*Do perfil$/),
     ])
     rows.slice(0, 3).forEach((row) => expect(within(row).queryByRole('button')).not.toBeInTheDocument())
     expect(rows[3]).toHaveTextContent('Material pedido · obrigatório')
     expect(rows[3]).toHaveTextContent('Texto curto')
+    expect(screen.getByText(/vêm do perfil de quem pede, guardado na defiro\./)).toBeInTheDocument()
   })
 
   it('adds a question on its own screen: its label, its answer type from the cards and whether it is mandatory', async () => {
@@ -490,8 +491,8 @@ describe('who handles each step', () => {
 
     expect(names(cards(/^Quem pode fazer o pedido/))).toEqual([
       'Todos os trabalhadores Todas as pessoas da organização',
-      'Divisão de Urbanismo Unidade do IdP',
-      'Divisão Financeira Unidade do IdP',
+      'Divisão de Urbanismo Grupo da organização',
+      'Divisão Financeira Grupo da organização',
     ])
   })
 
@@ -502,10 +503,11 @@ describe('who handles each step', () => {
 
     expect(names(cards(/^Quem trata este passo/))).toEqual([
       'Chefias da unidade do requerente Calculado a partir da unidade de quem faz o pedido',
-      'Divisão de Urbanismo Unidade do IdP',
-      'Divisão Financeira Unidade do IdP',
+      'Divisão de Urbanismo Grupo da organização',
+      'Divisão Financeira Grupo da organização',
     ])
     expect(screen.getByRole('radio', { name: /^Chefias da unidade do requerente/ })).toBeChecked()
+    expect(screen.getByText('Os grupos são os da organização, guardados na defiro.')).toBeInTheDocument()
   })
 
   it('says so when the groups cannot be read', async () => {

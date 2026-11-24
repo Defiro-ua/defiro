@@ -3,7 +3,7 @@
  */
 @ApplicationModule(
         displayName = "Workflow Engine",
-        allowedDependencies = {"registry", "identity"})
+        allowedDependencies = {"registry"})
 package io.github.defiro.engine;
 
 import org.springframework.modulith.ApplicationModule;

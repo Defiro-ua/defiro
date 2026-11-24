@@ -3,15 +3,16 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// The paths the server answers: the API, signing in with Entra ID and signing out. The Host header
-// is kept (no changeOrigin), so the server builds the sign-in redirect for this address.
+// The paths the server answers: the API, signing in through the identity provider and signing out.
+// The Host header is kept, so the server builds the sign-in redirect for this address. It has to be
+// said: the short form, with only the target, turns changeOrigin on.
 const serverPaths = ['/api', '/oauth2', '/login/oauth2', '/logout']
 const server = process.env.DEFIRO_SERVER ?? 'http://localhost:8080'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  server: { proxy: Object.fromEntries(serverPaths.map((path) => [path, server])) },
+  server: { proxy: Object.fromEntries(serverPaths.map((path) => [path, { target: server, changeOrigin: false }])) },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

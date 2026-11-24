@@ -1,14 +1,14 @@
-# Entra ID is played by a fake OpenID Connect provider: no test calls Microsoft.
+# The identity provider is played by a fake OpenID Connect provider: no test calls a real one.
 # The values the user sees (menu items, notices) are the ones of the web prototype (apps/web).
 @UC01
-Feature: Authenticate (SSO Entra ID)
+Feature: Authenticate (SSO)
   As a municipal employee,
-  I want to sign in with my organization's Microsoft account,
+  I want to sign in with my organization's account,
   so that I don't need another password and only see what my role allows.
 
   Background:
-    Given the organization's Entra ID has these accounts
-      | name          | unit                        | job title            | manager   | app role         |
+    Given these people work in the organization
+      | name          | unit                        | job title            | manager   | role             |
       | Ana Ferreira  | Divisão de Obras Municipais | Técnica Superior     | Rui Matos |                  |
       | Sofia Almeida | Modernização Administrativa | Gestora de workflows | Rui Matos | Workflow Manager |
 
@@ -19,32 +19,58 @@ Feature: Authenticate (SSO Entra ID)
       When Ana Ferreira chooses to sign in
       Then she is sent to the organization's sign-in page
 
-  Rule: defiro stores no password, and name, unit, job title and manager are read from Entra ID
-    # open question: Entra ID does not put job title, unit and manager in the token by default.
-    #                Does IT add them as optional claims, or does defiro read them from Microsoft Graph?
+  Rule: The identity provider only says who the person is; name, unit, job title and manager come from defiro
+    # The name is brought up to date from the identity provider at each sign-in.
 
-    Scenario: The profile comes from Entra ID
+    Scenario: The profile comes from defiro
       When Ana Ferreira signs in
       Then defiro knows her as "Ana Ferreira", "Técnica Superior" in "Divisão de Obras Municipais", managed by "Rui Matos"
 
-    Scenario: A change made in Entra ID shows at the next sign-in
-      Given Ana Ferreira signed in and out as "Técnica Superior"
-      And IT has since changed her job title in Entra ID to "Técnica Superior Especialista"
-      When she signs in again
+    Scenario: A change made in defiro shows without signing in again
+      Given Ana Ferreira is signed in
+      When IT changes her job title in defiro to "Técnica Superior Especialista"
       Then defiro knows her job title as "Técnica Superior Especialista"
 
     Scenario: Signing in stores no password
       When Ana Ferreira signs in
       Then defiro has stored no password
 
-  Rule: The groups the user belongs to are read from Entra ID
-    # Departments and units are groups that already exist in Entra ID (UC05, UC28).
-    # Entra ID puts each group's object id in the token, not its name.
-    # open question: above 200 groups Entra ID leaves the groups out of the token (overage),
-    #                and defiro would have to read them from Microsoft Graph.
+  Rule: Someone defiro does not know yet gets an account with no roles and no groups
 
-    Scenario: The groups come from Entra ID
-      Given in Entra ID Ana Ferreira belongs to the groups "Divisão de Obras Municipais" and "Finanças"
+    Scenario: A first sign-in creates the account
+      Given Marta Nunes has an account at the identity provider, and defiro does not know her yet
+      When Marta Nunes signs in
+      Then she lands on her task inbox
+      And her side menu is «Novo pedido» and «Caixa de tarefas»
+      And she belongs to no groups
+
+  Rule: A pre-registered person is recognised by their verified email, and only by that
+
+    Scenario: A verified email
+      Given Rita Lopes is registered in defiro by her email, as a "Workflow Manager"
+      And the identity provider has verified that email
+      When Rita Lopes signs in
+      Then her side menu is «Criar workflow», «Novo pedido», «Caixa de tarefas» and «Workflows»
+
+    Scenario: An email nobody verified
+      Given Rita Lopes is registered in defiro by her email, as a "Workflow Manager"
+      And the identity provider has not verified that email
+      When Rita Lopes signs in
+      Then her side menu is «Novo pedido» and «Caixa de tarefas»
+
+  Rule: An inactive person cannot sign in
+
+    Scenario: An inactive person is refused
+      Given Ana Ferreira is inactive in defiro
+      When Ana Ferreira signs in
+      Then she is back on the home page with the notice «A sua conta está inativa»
+      And she is not signed in to defiro
+
+  Rule: The groups the user belongs to are the ones defiro has
+    # Departments and units are groups too (UC05, UC28).
+
+    Scenario: The groups come from defiro
+      Given in defiro Ana Ferreira belongs to the groups "Divisão de Obras Municipais" and "Finanças"
       When Ana Ferreira signs in
       Then defiro knows her groups as "Divisão de Obras Municipais" and "Finanças"
 
@@ -73,7 +99,7 @@ Feature: Authenticate (SSO Entra ID)
       Then the top bar shows "Sofia Almeida" and "Gestora de workflows"
 
   Rule: Signing out ends the session and returns to the home page with the notice «Sessão terminada»
-    # open question: should signing out of defiro also sign the user out of Microsoft (Outlook, Teams)?
+    # It also ends the session at the identity provider: the next «Entrar» asks who is signing in.
 
     Scenario: Signing out ends the session
       Given Ana Ferreira is signed in
@@ -84,3 +110,9 @@ Feature: Authenticate (SSO Entra ID)
       Given Ana Ferreira is signed in
       When she signs out
       Then she is back on the home page with the notice «Sessão terminada»
+
+    @browser
+    Scenario: Signing out from the account menu
+      Given Ana Ferreira signed in with the browser
+      When she chooses «Terminar sessão» in the account menu
+      Then the browser shows the home page with the notice «Sessão terminada»

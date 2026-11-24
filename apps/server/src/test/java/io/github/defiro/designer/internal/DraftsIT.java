@@ -5,14 +5,17 @@ import static io.github.defiro.designer.internal.WorkflowDraftTest.withSteps;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import io.github.defiro.TestPeople;
 import io.github.defiro.TestcontainersConfiguration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -20,6 +23,18 @@ class DraftsIT {
 
     @Autowired
     Drafts drafts;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    UUID sofia;
+
+    @BeforeEach
+    void sofiaIsRegistered() {
+        TestPeople people = new TestPeople(jdbc);
+        people.clear();
+        sofia = people.register("Sofia Almeida", "sofia.almeida@cm.test");
+    }
 
     @Test
     void aNewDraftIsTheFirstRevisionAndUnpublished() {
@@ -51,11 +66,11 @@ class DraftsIT {
     void aPublishedDraftKeepsTheVersionTheEngineGaveAndWhoPublishedItWhen() {
         UUID id = drafts.add(withSteps(complete("Validação da chefia"))).id();
 
-        drafts.markPublished(id, 1, 3, new Publisher.Who("sofia.almeida", "Sofia Almeida"));
+        drafts.markPublished(id, 1, 3, sofia);
 
         Published published = drafts.find(id).orElseThrow().published();
         assertThat(published.version()).isEqualTo(3);
-        assertThat(published.by()).isEqualTo("sofia.almeida");
+        assertThat(published.by()).isEqualTo(sofia);
         assertThat(published.byName()).isEqualTo("Sofia Almeida");
         assertThat(published.at()).isCloseTo(Instant.now(), within(1, ChronoUnit.MINUTES));
         assertThat(drafts.all()).extracting(StoredDraft::id).contains(id);

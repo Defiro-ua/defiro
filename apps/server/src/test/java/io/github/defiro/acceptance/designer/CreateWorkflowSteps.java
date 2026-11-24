@@ -15,9 +15,8 @@ import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
-import io.github.defiro.FakeEntraId;
-import io.github.defiro.FakeEntraId.Account;
 import io.github.defiro.acceptance.Browser;
+import io.github.defiro.acceptance.Organization;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
@@ -27,13 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * UC03 through the Designer API. As in docs/sequence_diagram.txt, the browser holds the draft and
  * changes it, and the Designer creates, saves (whole), loads and publishes it: these steps play the
- * browser. People sign in through Entra ID, as in UC01, and keep a session. Each scenario gets a new
+ * browser. People sign in through the identity provider, as in UC01, and keep a session. Each scenario gets a new
  * instance, so the fields hold that scenario's people, draft and last answer.
  *
  * <p>The {@code @browser} scenarios also open the web app in a real browser ({@link DesignerScreen}).
@@ -43,11 +43,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public class CreateWorkflowSteps {
 
-    // The app role in Entra ID that UC01 reads from the token's "roles" claim.
-    private static final String WORKFLOW_MANAGER = "WorkflowManager";
     private static final String DRAFTS = "/api/designer/drafts";
 
-    private final FakeEntraId entraId = FakeEntraId.instance();
     private final Browser sofia = new Browser();
     private final Browser ana = new Browser();
     private String draftId;
@@ -57,6 +54,9 @@ public class CreateWorkflowSteps {
     private DesignerScreen screen;
     private Map<String, Object> file;
     private boolean acted;
+
+    @Autowired
+    Organization organization;
 
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
@@ -74,14 +74,18 @@ public class CreateWorkflowSteps {
 
     @Given("Sofia Almeida is a Workflow Manager")
     public void sofiaAlmeidaIsAWorkflowManager() {
-        entraId.save(new Account(
-                "Sofia Almeida", "Modernização Administrativa", "Gestora de workflows", "Rui Matos", WORKFLOW_MANAGER));
+        organization.employ(
+                "Sofia Almeida",
+                "Modernização Administrativa",
+                "Gestora de workflows",
+                "Rui Matos",
+                "WORKFLOW_MANAGER");
         signIn(sofia, "Sofia Almeida");
     }
 
     @Given("Ana Ferreira is not a Workflow Manager")
     public void anaFerreiraIsNotAWorkflowManager() {
-        entraId.save(new Account("Ana Ferreira", "Divisão de Obras Municipais", "Técnica Superior", "Rui Matos", null));
+        organization.employ("Ana Ferreira", "Divisão de Obras Municipais", "Técnica Superior", "Rui Matos", null);
         signIn(ana, "Ana Ferreira");
     }
 
@@ -532,7 +536,7 @@ public class CreateWorkflowSteps {
         return "steps.find { it.name == '%s' }".formatted(name);
     }
 
-    /** Signs in through Entra ID, as UC01 does, and loads the profile, which gives the CSRF cookie. */
+    /** Signs in through the identity provider, as UC01 does, and loads the profile, which gives the CSRF cookie. */
     private static void signIn(Browser browser, String name) {
         Assertions.assertThat(browser.signIn(name).statusCode())
                 .as(name + " signs in")

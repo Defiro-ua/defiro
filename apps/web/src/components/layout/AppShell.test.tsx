@@ -4,11 +4,9 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Profile } from '../../api/session'
 import { signOut } from '../../api/session'
-import { leaveTo } from '../../lib/leaveTo'
 import { AppShell } from './AppShell'
 
 vi.mock('../../api/session', () => ({ signOut: vi.fn() }))
-vi.mock('../../lib/leaveTo', () => ({ leaveTo: vi.fn() }))
 
 const ana: Profile = {
   name: 'Ana Ferreira',
@@ -36,7 +34,6 @@ async function clickSignOut() {
 describe('AppShell', () => {
   beforeEach(() => {
     vi.mocked(signOut).mockReset()
-    vi.mocked(leaveTo).mockReset()
   })
 
   it('shows the side menu the server allows this person', () => {
@@ -62,28 +59,27 @@ describe('AppShell', () => {
     expect(main).toContainElement(screen.getByRole('heading', { level: 1, name: 'Caixa de tarefas' }))
   })
 
-  it('on «Terminar sessão», ends the session on the server and goes where the server says', async () => {
-    vi.mocked(signOut).mockResolvedValue('http://localhost/?aviso=sessao-terminada')
+  it('on «Terminar sessão», signs out, with no notice', async () => {
+    vi.mocked(signOut).mockReturnValue(true)
     renderShell()
 
     await clickSignOut()
 
     expect(signOut).toHaveBeenCalledTimes(1)
-    await vi.waitFor(() => expect(leaveTo).toHaveBeenCalledWith('http://localhost/?aviso=sessao-terminada'))
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('says so when the session could not be ended, and stays on the screen', async () => {
-    vi.mocked(signOut).mockRejectedValue(new Error('POST /logout answered 500'))
+    vi.mocked(signOut).mockReturnValue(false)
     renderShell()
 
     await clickSignOut()
 
     expect(await within(screen.getByRole('status')).findByText('Não foi possível terminar a sessão')).toBeInTheDocument()
-    expect(leaveTo).not.toHaveBeenCalled()
   })
 
   it('closes that notice', async () => {
-    vi.mocked(signOut).mockRejectedValue(new Error('POST /logout answered 500'))
+    vi.mocked(signOut).mockReturnValue(false)
     renderShell()
     await clickSignOut()
     await screen.findByText('Não foi possível terminar a sessão')

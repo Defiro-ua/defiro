@@ -9,10 +9,8 @@ const ana: Profile = {
   menu: ['new-request', 'inbox'],
 }
 
-function respond(status: number, body?: unknown, url = '') {
-  const response = new Response(body === undefined ? null : JSON.stringify(body), { status })
-  Object.defineProperty(response, 'url', { value: url })
-  return response
+function respond(status: number, body?: unknown) {
+  return new Response(body === undefined ? null : JSON.stringify(body), { status })
 }
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -28,7 +26,7 @@ afterEach(() => {
 })
 
 describe('fetchProfile', () => {
-  it('returns who is signed in, as the server read it from Entra ID', async () => {
+  it('returns who is signed in, as defiro knows them', async () => {
     fetchMock.mockResolvedValue(respond(200, ana))
 
     await expect(fetchProfile()).resolves.toEqual(ana)
@@ -49,33 +47,28 @@ describe('fetchProfile', () => {
 })
 
 describe('signOut', () => {
-  it('posts to /logout with the CSRF token from the cookie in a header', async () => {
+  // jsdom does not submit forms
+  const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {})
+
+  afterEach(() => {
+    submit.mockClear()
+    document.body.replaceChildren()
+  })
+
+  it('signs out by posting a form to /logout with the CSRF token', () => {
     document.cookie = 'XSRF-TOKEN=token-from-the-server; path=/'
-    fetchMock.mockResolvedValue(respond(200, undefined, 'http://localhost/?aviso=sessao-terminada'))
 
-    await signOut()
+    expect(signOut()).toBe(true)
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/logout',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'X-XSRF-TOKEN': 'token-from-the-server' },
-      }),
-    )
+    const form = document.querySelector<HTMLFormElement>('form[action="/logout"]')!
+    expect(form.method).toBe('post')
+    expect(new FormData(form).get('_csrf')).toBe('token-from-the-server')
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns the page the server sends the browser to', async () => {
-    document.cookie = 'XSRF-TOKEN=t; path=/'
-    fetchMock.mockResolvedValue(respond(200, undefined, 'http://localhost/?aviso=sessao-terminada'))
-
-    await expect(signOut()).resolves.toBe('http://localhost/?aviso=sessao-terminada')
-  })
-
-  it('fails when the server refuses, so the person is not told they signed out', async () => {
-    document.cookie = 'XSRF-TOKEN=t; path=/'
-    fetchMock.mockResolvedValue(respond(403))
-
-    await expect(signOut()).rejects.toThrow('403')
+  it('does not submit without the CSRF cookie', () => {
+    expect(signOut()).toBe(false)
+    expect(submit).not.toHaveBeenCalled()
   })
 })

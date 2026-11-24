@@ -8,7 +8,7 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
-import io.github.defiro.FakeEntraId;
+import io.github.defiro.FakeOidcProvider;
 
 /**
  * A real browser (Chromium, through Playwright) on the web app, for the {@code @browser} scenarios.
@@ -61,7 +61,7 @@ public final class WebBrowser implements AutoCloseable {
 
     /** Signs in as UC01 does: «Entrar», the organization's sign-in page, and back on the inbox. */
     public void signIn(String name) {
-        FakeEntraId.instance().signInAs(name);
+        FakeOidcProvider.instance().signInAs(name);
         page.navigate("/");
         page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("Entrar"))
                 .click();

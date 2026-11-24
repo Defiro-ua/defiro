@@ -2,26 +2,34 @@ package io.github.defiro.acceptance.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import com.microsoft.playwright.options.AriaRole;
 import io.cucumber.datatable.DataTable;
+import io.cucumber.java.After;
 import io.cucumber.java.ParameterType;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
-import io.github.defiro.FakeEntraId;
-import io.github.defiro.FakeEntraId.Account;
+import io.github.defiro.FakeOidcProvider;
 import io.github.defiro.acceptance.Browser;
+import io.github.defiro.acceptance.Organization;
+import io.github.defiro.acceptance.WebBrowser;
 import io.restassured.response.Response;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * UC01. Each scenario is one {@link Browser}: it keeps defiro's cookies and follows the sign-in
- * redirects by hand, through {@link FakeEntraId}, the way a browser does through Microsoft's sign-in
- * page.
+ * redirects by hand, through {@link FakeOidcProvider}, the way a browser does through the
+ * organization's sign-in page.
  */
 public class IdentitySteps {
 
@@ -33,17 +41,26 @@ public class IdentitySteps {
             "Novo pedido", "new-request",
             "Caixa de tarefas", "inbox",
             "Workflows", "workflows");
-    private static final Map<String, String> NOTICES = Map.of("Sessão terminada", "sessao-terminada");
-    // Entra ID puts an app role's value in the token, not its display name. Values have no spaces.
-    private static final Map<String, String> APP_ROLE_VALUES = Map.of("Workflow Manager", "WorkflowManager");
+    private static final Map<String, String> NOTICES =
+            Map.of("Sessão terminada", "sessao-terminada", "A sua conta está inativa", "conta-inativa");
+    private static final Map<String, String> ROLES =
+            Map.of("Workflow Manager", "WORKFLOW_MANAGER", "Administrator", "ADMINISTRATOR");
 
-    private final FakeEntraId entraId = FakeEntraId.instance();
     private final Browser browser = new Browser();
 
     @Autowired
-    JdbcTemplate jdbc;
+    Organization organization;
 
+    @Autowired
+    JdbcClient jdbc;
+
+    // The port of the server under test, which also serves the web app
+    @Value("${local.server.port}")
+    int port;
+
+    private WebBrowser webBrowser;
     private String person;
+    private String registered;
     private Response lastResponse;
 
     @ParameterType("[A-Z][\\p{L}]+ [A-Z][\\p{L}]+")
@@ -51,16 +68,41 @@ public class IdentitySteps {
         return name;
     }
 
-    @Given("the organization's Entra ID has these accounts")
-    public void theOrganizationsEntraIdHasTheseAccounts(DataTable table) {
-        entraId.directory(table.asMaps().stream()
-                .map(row -> new Account(
+    @Given("these people work in the organization")
+    public void thesePeopleWorkInTheOrganization(DataTable table) {
+        table.asMaps()
+                .forEach(row -> organization.employ(
                         row.get("name"),
                         row.get("unit"),
                         row.get("job title"),
                         row.get("manager"),
-                        appRoleValue(row.get("app role"))))
-                .toList());
+                        role(row.get("role"))));
+    }
+
+    @Given("{person} has an account at the identity provider, and defiro does not know her yet")
+    public void hasAnAccountAndDefiroDoesNotKnowHer(String name) {
+        organization.account(name, true);
+    }
+
+    @Given("{person} is registered in defiro by her email, as a {string}")
+    public void isRegisteredByHerEmail(String name, String role) {
+        registered = name;
+        organization.people().grant(organization.people().register(name, Organization.email(name)), role(role));
+    }
+
+    @Given("the identity provider has verified that email")
+    public void theProviderHasVerifiedThatEmail() {
+        organization.account(registered, true);
+    }
+
+    @Given("the identity provider has not verified that email")
+    public void theProviderHasNotVerifiedThatEmail() {
+        organization.account(registered, false);
+    }
+
+    @Given("{person} is inactive in defiro")
+    public void isInactive(String name) {
+        organization.people().deactivate(organization.id(name));
     }
 
     @When("{person} chooses to sign in")
@@ -75,41 +117,25 @@ public class IdentitySteps {
         lastResponse = signIn(name);
     }
 
-    @When("she signs in again")
-    public void sheSignsInAgain() {
-        lastResponse = signIn(person);
-    }
-
     @Given("{person} is signed in")
     public void isSignedIn(String name) {
         person = name;
         assertLandsOnInbox(signIn(name));
     }
 
-    @Given("{person} signed in and out as {string}")
-    public void signedInAndOutAs(String name, String jobTitle) {
-        isSignedIn(name);
-        assertThat(profile().jsonPath().getString("jobTitle")).isEqualTo(jobTitle);
-        assertThat(signOut().statusCode()).isEqualTo(302);
+    @When("IT changes her job title in defiro to {string}")
+    public void itChangesHerJobTitle(String jobTitle) {
+        jdbc.sql("update identity.app_user set job_title = :jobTitle where id = :id")
+                .param("jobTitle", jobTitle)
+                .param("id", organization.id(person))
+                .update();
     }
 
-    @Given("IT has since changed her job title in Entra ID to {string}")
-    public void itChangedHerJobTitle(String jobTitle) {
-        Account account = entraId.account(person);
-        entraId.save(new Account(
-                account.name(), account.unit(), jobTitle, account.manager(), account.appRole(), account.groups()));
-    }
-
-    @Given("in Entra ID {person} belongs to the groups {string} and {string}")
+    @Given("in defiro {person} belongs to the groups {string} and {string}")
     public void belongsToTheGroups(String name, String group, String otherGroup) {
-        Account account = entraId.account(name);
-        entraId.save(new Account(
-                account.name(),
-                account.unit(),
-                account.jobTitle(),
-                account.manager(),
-                account.appRole(),
-                List.of(group, otherGroup)));
+        UUID id = organization.id(name);
+        organization.people().join(id, organization.people().group(group));
+        organization.people().join(id, organization.people().group(otherGroup));
     }
 
     @When("she signs out")
@@ -122,8 +148,8 @@ public class IdentitySteps {
         assertThat(lastResponse.statusCode()).isEqualTo(302);
         URI location = URI.create(lastResponse.header("Location"));
         assertThat(location.getScheme() + "://" + location.getAuthority() + location.getPath())
-                .isEqualTo(entraId.authorizationEndpoint());
-        assertThat(location.getQuery()).contains("client_id=" + FakeEntraId.CLIENT_ID);
+                .isEqualTo(FakeOidcProvider.instance().authorizationEndpoint());
+        assertThat(location.getQuery()).contains("client_id=" + FakeOidcProvider.CLIENT_ID);
     }
 
     @Then("defiro knows her as {string}, {string} in {string}, managed by {string}")
@@ -147,19 +173,30 @@ public class IdentitySteps {
     public void defiroKnowsHerGroupsAs(String group, String otherGroup) {
         Response me = profile();
         assertThat(me.statusCode()).isEqualTo(200);
-        assertThat(me.jsonPath().getList("groups", String.class))
-                .containsExactlyInAnyOrder(FakeEntraId.groupId(group), FakeEntraId.groupId(otherGroup));
+        assertThat(me.jsonPath().getList("groups", String.class)).containsExactlyInAnyOrder(group, otherGroup);
+    }
+
+    @Then("she belongs to no groups")
+    public void sheBelongsToNoGroups() {
+        Response me = profile();
+        assertThat(me.statusCode()).isEqualTo(200);
+        assertThat(me.jsonPath().getList("groups")).isEmpty();
+    }
+
+    @Then("she is not signed in to defiro")
+    public void sheIsNotSignedIn() {
+        assertThat(profile().statusCode()).isEqualTo(401);
     }
 
     @Then("defiro has stored no password")
     public void defiroHasStoredNoPassword() {
         assertLandsOnInbox(lastResponse);
-        List<String> columns = jdbc.queryForList("""
+        List<String> columns = jdbc.sql("""
                 select table_schema || '.' || table_name || '.' || column_name
                 from information_schema.columns
                 where table_schema not in ('pg_catalog', 'information_schema')
                   and (column_name ilike '%pass%' or column_name ilike '%pwd%' or column_name ilike '%secret%')
-                """, String.class);
+                """).query(String.class).list();
         assertThat(columns).as("columns that could hold a password").isEmpty();
     }
 
@@ -206,6 +243,37 @@ public class IdentitySteps {
         assertThat(location.getQuery()).isEqualTo("aviso=" + notice);
     }
 
+    @Given("{person} signed in with the browser")
+    public void signedInWithTheBrowser(String name) {
+        webBrowser = WebBrowser.open(port);
+        webBrowser.signIn(name);
+    }
+
+    @When("^she chooses «Terminar sessão» in the account menu$")
+    public void sheChoosesToSignOutInTheAccountMenu() {
+        button(Pattern.compile("menu da conta")).click();
+        button(Pattern.compile("Terminar sessão")).click();
+    }
+
+    @Then("^the browser shows the home page with the notice «(.+)»$")
+    public void theBrowserShowsTheHomePageWithTheNotice(String text) {
+        webBrowser.page().waitForURL(url -> URI.create(url).getPath().equals(HOME));
+        PlaywrightAssertions.assertThat(webBrowser.page().getByText(text, new Page.GetByTextOptions().setExact(true)))
+                .isVisible();
+        assertThat(webBrowser.page().request().get("/api/me").status()).isEqualTo(401);
+    }
+
+    @After
+    public void closeTheBrowser() {
+        if (webBrowser != null) {
+            webBrowser.close();
+        }
+    }
+
+    private Locator button(Pattern name) {
+        return webBrowser.page().getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(name));
+    }
+
     private Response startSignIn() {
         return browser.startSignIn();
     }
@@ -227,12 +295,12 @@ public class IdentitySteps {
         assertThat(URI.create(response.header("Location")).getPath()).isEqualTo(INBOX);
     }
 
-    private static String appRoleValue(String displayName) {
+    private static String role(String displayName) {
         if (displayName == null || displayName.isBlank()) {
             return null;
         }
-        String value = APP_ROLE_VALUES.get(displayName);
-        assertThat(value).as("app role value for " + displayName).isNotNull();
-        return value;
+        String role = ROLES.get(displayName);
+        assertThat(role).as("the role " + displayName).isNotNull();
+        return role;
     }
 }

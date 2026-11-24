@@ -3,6 +3,7 @@ package io.github.defiro.engine.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.defiro.TestPeople;
 import io.github.defiro.TestcontainersConfiguration;
 import io.github.defiro.engine.deployment.Deployment;
 import io.github.defiro.engine.deployment.Publication;
@@ -11,11 +12,13 @@ import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.WorkflowSpecification;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 @Import(TestcontainersConfiguration.class)
@@ -30,52 +33,64 @@ class SpecificationVersionsIT {
 
     final UUID draft = UUID.randomUUID();
 
+    TestPeople people;
+    UUID sofia;
+
+    @BeforeEach
+    void sofiaIsRegistered() {
+        people = new TestPeople(jdbc);
+        people.clear();
+        sofia = people.register("Sofia Almeida", "sofia.almeida@cm.test");
+    }
+
     @Test
     void theFirstDeploymentIsVersionOne() {
-        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1)))
+        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1)))
                 .isEqualTo(1);
     }
 
     @Test
     void aNewRevisionOfTheDraftIsTheNextVersion() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
-        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 4)))
+        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 4)))
                 .isEqualTo(2);
     }
 
     @Test
     void deployingTheSameRevisionAgainGivesTheSameVersion() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
-        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1)))
+        assertThat(deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1)))
                 .isEqualTo(1);
     }
 
     @Test
     void eachWorkflowCountsItsOwnVersions() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
         assertThat(deployment.deploy(
-                        specification("Horas extraordinárias"), new Publication("sofia.almeida", UUID.randomUUID(), 1)))
+                        specification("Horas extraordinárias"), new Publication(sofia, UUID.randomUUID(), 1)))
                 .isEqualTo(1);
     }
 
     @Test
     void aVersionKeepsTheSpecificationItWasDeployedWith() {
         WorkflowSpecification first = specification("Ajudas de custo");
-        deployment.deploy(first, new Publication("sofia.almeida", draft, 1));
-        deployment.deploy(specification("Ajudas de custo e transporte"), new Publication("sofia.almeida", draft, 2));
+        deployment.deploy(first, new Publication(sofia, draft, 1));
+        deployment.deploy(specification("Ajudas de custo e transporte"), new Publication(sofia, draft, 2));
 
         assertThat(deployment.version(draft, 1)).contains(first);
     }
 
     @Test
     void aDeployedVersionCannotBeChanged() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        UUID ana = people.register("Ana Ferreira", "ana.ferreira@cm.test");
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
         assertThatThrownBy(() -> jdbc.sql(
-                                "update engine.specification_version set published_by = 'outra.pessoa' where draft = :draft")
+                                "update engine.specification_version set published_by = :other where draft = :draft")
+                        .param("other", ana)
                         .param("draft", draft)
                         .update())
                 .isInstanceOf(DataAccessException.class)
@@ -85,7 +100,7 @@ class SpecificationVersionsIT {
 
     @Test
     void aDeployedVersionCannotBeDeleted() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
         assertThatThrownBy(() -> jdbc.sql("delete from engine.specification_version where draft = :draft")
                         .param("draft", draft)
@@ -96,8 +111,15 @@ class SpecificationVersionsIT {
     }
 
     @Test
+    void publishedByMustBeAPerson() {
+        assertThatThrownBy(() -> deployment.deploy(
+                        specification("Ajudas de custo"), new Publication(UUID.randomUUID(), draft, 1)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void aVersionNeverDeployedIsNotFound() {
-        deployment.deploy(specification("Ajudas de custo"), new Publication("sofia.almeida", draft, 1));
+        deployment.deploy(specification("Ajudas de custo"), new Publication(sofia, draft, 1));
 
         assertThat(deployment.version(draft, 2)).isEmpty();
         assertThat(deployment.version(UUID.randomUUID(), 1)).isEmpty();

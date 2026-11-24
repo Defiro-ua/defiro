@@ -2,8 +2,7 @@ package io.github.defiro.acceptance;
 
 import io.cucumber.java.Before;
 import io.cucumber.spring.CucumberContextConfiguration;
-import io.github.defiro.FakeEntraId;
-import io.github.defiro.TestTokens;
+import io.github.defiro.FakeOidcProvider;
 import io.github.defiro.TestcontainersConfiguration;
 import io.restassured.RestAssured;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,19 +14,18 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * The one Spring context every scenario shares: the whole app on a random port, PostgreSQL in
- * Testcontainers, an identity provider that trusts {@link TestTokens}, and {@link FakeEntraId} in
- * place of Microsoft Entra ID for signing in, and the web app ({@link WebApp}) for the browser.
- * Step definitions go in
- * this package or below it, one sub-package per module, for example {@code acceptance.designer}.
+ * Testcontainers, {@link FakeOidcProvider} as the organization's identity provider, and the web app
+ * ({@link WebApp}) for the browser. Step definitions go in this package or below it, one sub-package
+ * per module, for example {@code acceptance.designer}.
  */
 @CucumberContextConfiguration
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import({TestcontainersConfiguration.class, TestTokens.TrustedIssuer.class, WebApp.class})
+@Import({TestcontainersConfiguration.class, WebApp.class})
 public class CucumberSpringConfiguration {
 
     @DynamicPropertySource
-    static void signInThroughFakeEntraId(DynamicPropertyRegistry registry) {
-        FakeEntraId.register(registry);
+    static void signInThroughTheFakeProvider(DynamicPropertyRegistry registry) {
+        FakeOidcProvider.register(registry);
         WebApp.register(registry);
     }
 

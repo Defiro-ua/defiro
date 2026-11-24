@@ -6,12 +6,14 @@ import static org.hamcrest.Matchers.contains;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import io.github.defiro.acceptance.Organization;
 import io.restassured.response.Response;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * UC05: who handles each step, and who can make the request, from the organization's groups and
- * units. The draft, Sofia's session and the browser are the scenario's own, kept by
+ * UC05: who handles each step, and who can make the request, from the organization's groups. The
+ * draft, Sofia's session and the browser are the scenario's own, kept by
  * {@link CreateWorkflowSteps}.
  */
 public class AssignGroupsSteps {
@@ -21,8 +23,21 @@ public class AssignGroupsSteps {
     @Autowired
     CreateWorkflowSteps designer;
 
+    @Autowired
+    Organization organization;
+
     private Response options;
     private String asked;
+
+    @Given("the organization has the groups {string}, {string}, {string}, {string} and {string}")
+    public void theOrganizationHasTheGroups(String a, String b, String c, String d, String e) {
+        List.of(a, b, c, d, e).forEach(organization.people()::group);
+    }
+
+    @Given("the group {string} is removed from defiro")
+    public void theGroupIsRemovedFromDefiro(String name) {
+        organization.remove(name);
+    }
 
     @When("she asks who can handle a step")
     public void sheAsksWhoCanHandleAStep() {

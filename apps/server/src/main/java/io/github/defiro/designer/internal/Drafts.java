@@ -57,15 +57,18 @@ class Drafts {
                 .list();
     }
 
-    /** Marks the draft as published at this revision, as this version, by this person, now. */
-    void markPublished(UUID id, int revision, int version, Publisher.Who who) {
+    /**
+     * Marks the draft as published at this revision, as this version, by this person, now. Their name
+     * is the one identity has now; it stays as it is if they change it later.
+     */
+    void markPublished(UUID id, int revision, int version, UUID by) {
         jdbc.sql("update designer.draft set published_revision = :revision, published_version = :version,"
-                        + " published_by = :by, published_by_name = :byName, published_at = now() where id = :id")
+                        + " published_by = :by, published_by_name = (select name from identity.app_user where id = :by),"
+                        + " published_at = now() where id = :id")
                 .param("id", id)
                 .param("revision", revision)
                 .param("version", version)
-                .param("by", who.id())
-                .param("byName", who.name())
+                .param("by", by)
                 .update();
     }
 
@@ -84,7 +87,7 @@ class Drafts {
         }
         return new Published(
                 version,
-                row.getString("published_by"),
+                row.getObject("published_by", UUID.class),
                 row.getString("published_by_name"),
                 row.getObject("published_at", OffsetDateTime.class).toInstant());
     }

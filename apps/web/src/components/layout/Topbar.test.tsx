@@ -43,8 +43,8 @@ describe('Topbar', () => {
     expect(screen.getByText('SA')).toHaveAttribute('aria-hidden', 'true')
   })
 
-  it('still offers the account menu when Entra ID sent no name, job title or unit', () => {
-    // The server sends null for what the token does not carry
+  it('still offers the account menu when defiro has no name, job title or unit', () => {
+    // The server sends null for what defiro does not have
     render(<Topbar profile={{ ...sofia, name: null, jobTitle: null, unit: null, manager: null }} onSignOut={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: /menu da conta/ })).toBeInTheDocument()

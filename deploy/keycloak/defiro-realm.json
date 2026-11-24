@@ -1,0 +1,41 @@
+{
+  "realm": "defiro",
+  "displayName": "defiro",
+  "enabled": true,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "defiro",
+      "name": "defiro",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "defiro-dev-only",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/login/oauth2/code/oidc",
+        "http://localhost:5173/login/oauth2/code/oidc",
+        "http://localhost:8080/login/oauth2/code/oidc"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/?aviso=sessao-terminada##http://localhost:5173/?aviso=sessao-terminada##http://localhost:8080/?aviso=sessao-terminada"
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "5f0a1c9e-6a53-4c0e-9d0b-3a7f1e2d4c01",
+      "username": "sofia.almeida",
+      "firstName": "Sofia",
+      "lastName": "Almeida",
+      "email": "sofia.almeida@defiro.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "defiro", "temporary": false }]
+    }
+  ]
+}

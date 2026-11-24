@@ -1,27 +1,30 @@
 package io.github.defiro;
 
-import static io.github.defiro.TestTokens.TRUSTED_KEY;
-import static io.github.defiro.TestTokens.bearer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.nimbusds.jose.jwk.RSAKey;
+import io.github.defiro.FakeOidcProvider.Account;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-// The app trusts tokens signed with TRUSTED_KEY (see TestTokens), and not those signed with OTHER_KEY.
-@Import({TestcontainersConfiguration.class, TestTokens.TrustedIssuer.class})
+@Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
 class SecurityIT {
 
-    static final RSAKey OTHER_KEY = TestTokens.newKey();
+    @DynamicPropertySource
+    static void signInThroughTheFakeProvider(DynamicPropertyRegistry registry) {
+        FakeOidcProvider.register(registry);
+    }
 
     @Autowired
     MockMvc mvc;
@@ -32,35 +35,24 @@ class SecurityIT {
     }
 
     @Test
-    void requestWithoutTokenIsUnauthorized() throws Exception {
+    void requestWithoutASessionIsUnauthorized() throws Exception {
         mvc.perform(get("/api/anything")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void requestWithValidTokenGetsPastSecurity() throws Exception {
-        // 404, not 401: the token was accepted and there is simply no such endpoint yet.
-        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, bearer(TRUSTED_KEY)))
-                .andExpect(status().isNotFound());
-    }
+    void aBearerTokenIsNotAWayIn() throws Exception {
+        // Even an ID token the provider signed for defiro: people sign in with the browser only.
+        String idToken = FakeOidcProvider.instance()
+                .idToken(new Account("Ana Ferreira", "ana.ferreira@cm.test", true), Map.of());
 
-    @Test
-    void requestWithTokenSignedByAnotherKeyIsUnauthorized() throws Exception {
-        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, bearer(OTHER_KEY)))
+        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer " + idToken))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void writeWithoutTokenIsRefusedByCsrfProtection() throws Exception {
+    void writeWithoutTheCsrfTokenIsRefused() throws Exception {
         // 403, not 401: the CSRF check runs before authentication. If CSRF protection were
         // turned off, this would be 401.
         mvc.perform(post("/api/anything")).andExpect(status().isForbidden());
-    }
-
-    @Test
-    void writeWithValidTokenNeedsNoCsrfToken() throws Exception {
-        // Spring skips the CSRF check for bearer-token requests, since a browser never attaches
-        // that header on its own.
-        mvc.perform(post("/api/anything").header(HttpHeaders.AUTHORIZATION, bearer(TRUSTED_KEY)))
-                .andExpect(status().isNotFound());
     }
 }

@@ -1,9 +1,14 @@
 /**
  * The session cookie goes with every request, so the server asks writes for the CSRF token it left
- * in the XSRF-TOKEN cookie, sent back in a header.
+ * in the XSRF-TOKEN cookie. Empty when there is no such cookie.
  */
+export function csrfToken(): string {
+  return cookie('XSRF-TOKEN')
+}
+
+/** The CSRF token as a write with fetch sends it back */
 export function csrfHeader(): Record<string, string> {
-  return { 'X-XSRF-TOKEN': cookie('XSRF-TOKEN') }
+  return { 'X-XSRF-TOKEN': csrfToken() }
 }
 
 function cookie(name: string): string {

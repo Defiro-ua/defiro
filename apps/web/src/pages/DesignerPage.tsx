@@ -402,7 +402,7 @@ function Designer({ id, draft: first, types, groups }: Loaded) {
           </legend>
           <ArrowHint />
           <span id="ajuda-passo-quem" className="text-[14px] leading-5 text-ink-3">
-            Os grupos e as unidades vêm do fornecedor de identidade (IdP) da organização.
+            Os grupos são os da organização, guardados na defiro.
           </span>
           {fq.error && <FieldError id={'erro-' + fq.id}>{fq.error}</FieldError>}
           {groupCards('quem-' + step.id, step.handledBy, (g) => change({ t: 'step', step: step.id, k: 'handledBy', v: g }), groups.handlers)}

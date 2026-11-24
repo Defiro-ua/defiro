@@ -3,7 +3,11 @@ import { useLocation, useNavigate } from 'react-router'
 import type { Notice } from '../components/Flash'
 
 /** The notices the server can ask for with `?aviso=…` when it sends the browser back here */
-const known = new Map<string, Notice>([['sessao-terminada', { tom: 'ok', titulo: 'Sessão terminada' }]])
+const known = new Map<string, Notice>([
+  ['sessao-terminada', { tom: 'ok', titulo: 'Sessão terminada' }],
+  ['entrada-falhada', { tom: 'bad', titulo: 'Não foi possível entrar', texto: 'Tente outra vez daqui a pouco.' }],
+  ['conta-inativa', { tom: 'bad', titulo: 'A sua conta está inativa', texto: 'Fale com os serviços informáticos da sua organização.' }],
+])
 
 /**
  * The notice named in the address (`?aviso=sessao-terminada` after signing out). It is

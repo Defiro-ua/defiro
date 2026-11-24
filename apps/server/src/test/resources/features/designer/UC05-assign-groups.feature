@@ -1,7 +1,6 @@
 # Draft for team review: the examples come from the acceptance criteria of issue #29 and the groups
-# of the web prototype. As agreed for #29, the organization's groups and units are a configured list
-# (defiro.directory in application.properties) until defiro reads them from Entra ID through
-# Microsoft Graph, and a step keeps the name of who handles it.
+# of the web prototype. The organization's groups are the ones in defiro's own database, where a unit
+# is a group too, and a step keeps the name of who handles it.
 @UC05
 Feature: Assign a group or unit to each step
   As a Workflow Manager,
@@ -10,6 +9,7 @@ Feature: Assign a group or unit to each step
 
   Background:
     Given Sofia Almeida is a Workflow Manager
+    And the organization has the groups "Chefias", "Divisão de Obras Municipais", "Divisão Financeira", "Recursos Humanos" and "RH · Formação"
     And she is designing the workflow "Ajudas de custo"
 
   Rule: Each step's handler is chosen from the organization's groups and units
@@ -23,6 +23,12 @@ Feature: Assign a group or unit to each step
       Given the step "Validação da chefia" is handled by "Departamento de Marketing"
       When she creates the workflow
       Then it is refused with "Passo 2 («Validação da chefia»): «Departamento de Marketing» não é um grupo nem uma unidade da organização."
+
+    Scenario: A group removed from defiro can no longer be chosen
+      Given the step "Validação da chefia" is handled by "Divisão Financeira"
+      And the group "Divisão Financeira" is removed from defiro
+      When she creates the workflow
+      Then it is refused with "Passo 2 («Validação da chefia»): «Divisão Financeira» não é um grupo nem uma unidade da organização."
 
     @browser
     Scenario: The step's screen offers the organization's groups and units

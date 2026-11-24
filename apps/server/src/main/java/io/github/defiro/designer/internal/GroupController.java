@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Who can make a request and who can handle a step (UC05), for the designer's cards. */
-@PreAuthorize("hasRole('WorkflowManager')")
+@PreAuthorize("hasRole('WORKFLOW_MANAGER')")
 @RestController
 class GroupController {
 

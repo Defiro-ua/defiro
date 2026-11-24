@@ -31,8 +31,8 @@ import tools.jackson.databind.node.ObjectNode;
  * version, exactly as the Engine keeps it; a file comes in as a new draft, which the Workflow
  * Manager reviews in the designer and creates, so the Designer checks it like any other draft.
  */
-// Only a Workflow Manager designs workflows: the app role that identity turns into a role.
-@PreAuthorize("hasRole('WorkflowManager')")
+// Only a Workflow Manager designs workflows: a role identity reads from defiro's database.
+@PreAuthorize("hasRole('WORKFLOW_MANAGER')")
 @RestController
 @RequestMapping("/api/designer/drafts")
 class WorkflowFileController {

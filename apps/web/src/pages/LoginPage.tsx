@@ -36,7 +36,7 @@ const footerColumns = [
   },
 ]
 
-/** E01 · Entrar (UC01): welcome screen; «Entrar» opens the organization’s sign-in page (Entra ID) */
+/** E01 · Entrar (UC01): welcome screen; «Entrar» opens the organization’s sign-in page */
 export function LoginPage() {
   const [notice, closeNotice] = useAddressNotice()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -53,7 +53,7 @@ export function LoginPage() {
         <div className="box-border flex min-h-16 flex-wrap items-center gap-x-4.5 gap-y-2.5 rounded-pill border-emph border-line-strong bg-bg py-2 pr-2.5 pl-6 shadow-island">
           <Logo className="h-8" />
           <span aria-hidden="true" className="flex-[1_1_200px]" />
-          <Button href="/oauth2/authorization/entra" icon="logIn" iconSize={20}>
+          <Button href="/oauth2/authorization/oidc" icon="logIn" iconSize={20}>
             Entrar
           </Button>
         </div>

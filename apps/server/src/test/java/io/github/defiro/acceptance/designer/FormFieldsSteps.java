@@ -35,7 +35,7 @@ public class FormFieldsSteps {
     public void theFormShowsFromTheProfile(String name, String unit, String manager) {
         assertThat(screen().profileRows()).hasCount(3);
         assertThat(screen().profileRows()).containsText(new String[] {name, unit, manager});
-        assertThat(screen().profileRows().first()).containsText("Do perfil (IdP)");
+        assertThat(screen().profileRows().first()).containsText("Do perfil");
         assertThat(screen().profileRows().getByRole(AriaRole.BUTTON)).hasCount(0);
     }
 

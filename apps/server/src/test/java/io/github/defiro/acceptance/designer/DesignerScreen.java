@@ -153,12 +153,12 @@ final class DesignerScreen implements AutoCloseable {
 
     /** The rows of the form that come from the profile and cannot be changed */
     Locator profileRows() {
-        return formFields().filter(new Locator.FilterOptions().setHasText("Do perfil (IdP)"));
+        return formFields().filter(new Locator.FilterOptions().setHasText("Do perfil"));
     }
 
     /** The questions for the requester, in order */
     Locator requesterRows() {
-        return formFields().filter(new Locator.FilterOptions().setHasNotText("Do perfil (IdP)"));
+        return formFields().filter(new Locator.FilterOptions().setHasNotText("Do perfil"));
     }
 
     void addQuestion() {

@@ -24,14 +24,14 @@ Draw a workflow in the designer: the steps it goes through, the people involved 
 ```bash
 git clone https://github.com/Defiro-ua/defiro.git
 cd defiro
-./mvnw verify                                 # builds everything and runs the tests
-docker compose -f deploy/compose.yaml up -d   # local Postgres on port 5432
-java -jar apps/server/target/server-0.1.0-SNAPSHOT.jar
+./mvnw verify                                        # builds everything and runs the tests
+docker compose -f deploy/compose.yaml up -d --wait   # Postgres, Keycloak and the web app
+java -jar apps/server/target/server-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
-That's it: the server answers at <http://localhost:8080/actuator/health>.
+That's it: open <http://localhost:3000> and sign in as `sofia.almeida`, password `defiro` (a development account only).
 
-**Any identity provider.** People sign in through any OpenID Connect provider, such as Microsoft Entra ID, Keycloak or Auth0: [connect yours](#sign-in).
+**Any identity provider.** People sign in through any OpenID Connect provider. Development uses Keycloak: [connect yours](#sign-in).
 
 ---
 
@@ -69,7 +69,10 @@ sudo apt install openjdk-21-jdk docker.io
 
 The quick start is at the top of this README. This section covers the IDE, the web app and sign-in.
 
-**In IntelliJ IDEA**, open the folder, set the project SDK to 21 (**File → Project Structure**), and run `DefiroApplication`. To skip the compose step, run `TestDefiroApplication` (in `apps/server/src/test`) instead: it starts its own throwaway Postgres.
+**In IntelliJ IDEA**, open the folder, set the project SDK to 21 (**File → Project Structure**), and run `DefiroApplication`. Set the active profile to `dev` to sign in with the Keycloak of `deploy/compose.yaml`; start it first with `docker compose -f deploy/compose.yaml up -d --wait keycloak`, because the server doesn't start while its provider is down. To skip Postgres, run `TestDefiroApplication` (in `apps/server/src/test`) instead: it starts its own throwaway one.
+
+> [!IMPORTANT]
+> Migrations of use cases that aren't in use anywhere yet are edited in place. When one you have already run changes, Flyway refuses to start the server with a checksum mismatch: recreate your development database with `docker compose -f deploy/compose.yaml down -v`, which deletes its data, and start again.
 
 ### Web app
 
@@ -82,33 +85,52 @@ Or, with Node installed, `npm install` and `npm run dev` in `apps/web`. See `app
 
 ### Sign-in
 
-The server works with any OpenID Connect provider (Microsoft Entra ID, Keycloak, Auth0 and others). Point it at one with environment variables. Never put their values in the repository.
+The identity provider only says who someone is. From its token defiro reads `iss`, `sub`, `name`, `email` and `email_verified`, and nothing else: roles and groups are in defiro's database. Any OpenID Connect provider works, and changing provider is changing these four variables. Never put their values in the repository.
 
-**Signing in from the web app.** People choose «Entrar» and sign in on the provider's page. Register defiro in the provider as a web app with a client secret, then set:
-
-| Variable | Example for Microsoft Entra ID |
+| Variable | Example |
 |---|---|
-| `SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_ENTRA_ISSUER_URI` | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
-| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_ENTRA_CLIENT_ID` | the app registration's Application (client) ID |
-| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_ENTRA_CLIENT_SECRET` | a client secret of the app registration |
-| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_ENTRA_SCOPE` | `openid,profile` |
+| `SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI` | `https://idp.example.org/realms/defiro` |
+| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID` | `defiro` |
+| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET` | the client's secret |
+| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_SCOPE` | `openid,profile,email` |
 
-In the app registration:
+Register defiro in the provider as a confidential client (a web app with a secret) with the authorization code flow and PKCE (S256), and these two addresses, where `https://defiro.example.org` is where browsers open the web app:
 
-- **Redirect URI** (platform *Web*): the web app's address followed by `/login/oauth2/code/entra`, such as `http://localhost:5173/login/oauth2/code/entra` for `npm run dev`.
-- **App role** `WorkflowManager` (display name *Workflow Manager*), assigned to the people who model workflows.
-- **Token configuration**: add the groups claim (security groups), so the id token carries the object ids of the person's groups.
-- defiro also reads the claims `department`, `jobTitle` and `manager`. Entra ID does not send them by default. Whether IT adds them to the token or defiro reads them from Microsoft Graph is still an open question (see `uc01-authenticate.feature`).
+- **Redirect URI**: `https://defiro.example.org/login/oauth2/code/oidc`
+- **Post-logout redirect URI**: `https://defiro.example.org/?aviso=sessao-terminada`
 
-**Calling the API with a bearer token.** For clients other than the web app:
+The `dev` profile sets all of this for the Keycloak of `deploy/compose.yaml`, whose realm is `deploy/keycloak/defiro-realm.json`. Its secret and password are for development only.
 
-| Variable | Example for Microsoft Entra ID |
-|---|---|
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_AUDIENCES` | the server's app registration, such as `api://defiro` |
+> [!IMPORTANT]
+> - **One issuer address.** The browser and the server must reach the provider at the same address: it goes in every token's `iss`, which is compared as text. In development it is `http://localhost:8081`, because the server runs on the host. If the server ever runs in a container, give the provider a DNS name that both can resolve; never `localhost` on one side and the service's name on the other.
+> - **Always the issuer URI.** Don't replace it with the provider's endpoints, one by one: without it, Spring doesn't compare the token's `iss`.
+> - **The server only behind its proxy.** It believes the `X-Forwarded-*` headers of whoever calls it (nginx, or Vite in development). Don't publish its port.
+> - Without these variables nobody can sign in: only `/actuator/health` answers, and every other request is refused. With them, the server only starts if it reaches the provider.
 
-> [!NOTE]
-> Without either, nobody can sign in: only `/actuator/health` answers, and every other request is refused.
+**Who someone is in defiro.** The first time an account signs in, it is linked to the person registered in advance with its email, if the provider says the email is verified and that person has no account yet. Otherwise defiro creates a new person, with no roles and no groups. From then on the account is known by its issuer and subject.
+
+**Roles and groups.** There is no administration screen yet: an administrator of the database makes these changes in SQL, and triggers record who joins, leaves or gets what in `identity.audit_log`: people, roles and group members. They count in 60 seconds at most, without signing in again. For example, the first administrator, before they ever sign in:
+
+```sql
+insert into identity.app_user (name, email) values ('Ana Dias', 'ana.dias@example.org');
+
+insert into identity.user_role (user_id, role)
+select id, role
+from identity.app_user, (values ('ADMINISTRATOR'), ('WORKFLOW_MANAGER')) as r (role)
+where lower(email) = 'ana.dias@example.org';
+
+insert into identity.app_group (name) values ('Divisão Financeira') on conflict do nothing;
+
+insert into identity.group_member (group_id, user_id)
+select g.id, u.id
+from identity.app_group g, identity.app_user u
+where g.name = 'Divisão Financeira' and lower(u.email) = 'ana.dias@example.org';
+
+-- People are never deleted. Inactive, they can't sign in, and their open sessions end.
+update identity.app_user set active = false where lower(email) = 'ana.dias@example.org';
+```
+
+`WORKFLOW_MANAGER` opens the designer. Nothing asks for `ADMINISTRATOR` yet. A workflow's step keeps its group's name, so after renaming a group, choose it again in the drafts that use it.
 
 ---
 
@@ -121,17 +143,17 @@ In the app registration:
 | `packages/spec` | Specification model, plain Java |
 | `packages/plugin-sdk` | The interface plugins implement, plain Java |
 | `plugins/` | Built-in plugins, loaded at runtime from the Plugin Registry |
-| `deploy/compose.yaml` | Local Postgres and the web app |
+| `deploy/` | Local Postgres, Keycloak and the web app, and the Keycloak realm |
 
 ---
 
 ## Rules to know before writing code
 
 - **Modules.** Code goes in one of the server's modules. A module's root package is its public API; everything else goes in its sub-packages, which other modules can't use. Each module's `package-info.java` lists the modules it may depend on. `ModularityTests` fails the build if code breaks these rules.
-- **Data.** Each module owns one database schema (`designer`, `engine`, `registry`). Flyway migrations go in `apps/server/src/main/resources/db/migration` and always use schema-qualified table names, such as `engine.instance`.
+- **Data.** Each module owns one database schema (`identity`, `designer`, `engine`, `registry`). Only `identity` knows people, roles and groups: the other modules know a person by `authentication.getName()`, their id in defiro, and may reference `identity.app_user` and `identity.app_group` with foreign keys. The designer also reads, in SQL, the groups' names and the name of who publishes; nobody but `identity` writes there. Flyway migrations go in `apps/server/src/main/resources/db/migration` and always use schema-qualified table names, such as `engine.instance`. Name a new one `V<date>_<n>__<what>.sql`, with a date after the last one in `develop`: Flyway refuses one that arrives out of order.
 - **Plugins.** The server never depends on a plugin. A plugin's id is `name@version`, generated by `plugins/pom.xml`.
 - **Tests.** Name a test after what it needs: `*Test` when a JDK is enough, `*IT` when it starts Docker containers.
-- **Acceptance tests.** Each user story has one feature file in `apps/server/src/test/resources/features`, tagged with its use case (such as `@UC03`), with one `Rule:` per acceptance criterion. Step definitions go in `io.github.defiro.acceptance`, one sub-package per module, and call the REST API with REST Assured; `TestTokens` signs the tokens. Tag a scenario `@wip` until it passes: the pipeline skips `@wip`. To run one story locally: `./mvnw verify -DskipUTs -Dcucumber.filter.tags="@UC03"`. The report is in `apps/server/target/cucumber/report.html`.
+- **Acceptance tests.** Each user story has one feature file in `apps/server/src/test/resources/features`, tagged with its use case (such as `@UC03`), with one `Rule:` per acceptance criterion. Step definitions go in `io.github.defiro.acceptance`, one sub-package per module, and call the REST API with REST Assured. `FakeOidcProvider` is the identity provider that signs people in, and `Organization` has the people, roles and groups. Tag a scenario `@wip` until it passes: the pipeline skips `@wip`. To run one story locally: `./mvnw verify -DskipUTs -Dcucumber.filter.tags="@UC03"`. The report is in `apps/server/target/cucumber/report.html`.
 - **Browser scenarios.** A scenario tagged `@browser` opens the web app in Chromium through Playwright for Java (`acceptance.WebBrowser`), and the server under test serves the web app's build, as nginx does in production. Locally they are left out unless asked for: run `npm run build` in `apps/web`, then `./mvnw verify -DskipUTs -Dcucumber.filter.tags="@browser"`. The first run downloads Chromium. The Acceptance stage of CI builds the web app and runs them. To watch them in a Chromium window, add `-Dplaywright.headed=true`: each action then waits 500 ms, or what `-Dplaywright.slowMo=<ms>` says, so the eye can follow it.
 
 ---
@@ -139,11 +161,11 @@ In the app registration:
 ## Common commands
 
 ```bash
-./mvnw verify                                 # everything CI runs for the server; needs Docker
-./mvnw verify -DskipITs                       # commit stage only: formatting, build and unit tests, no Docker
-./mvnw spotless:apply                         # formats the Java code
-docker compose -f deploy/compose.yaml up -d   # starts the local Postgres
-docker compose -f deploy/compose.yaml down    # stops it; add -v to delete its data
+./mvnw verify                                        # everything CI runs for the server; needs Docker
+./mvnw verify -DskipITs                              # commit stage only: formatting, build and unit tests, no Docker
+./mvnw spotless:apply                                # formats the Java code
+docker compose -f deploy/compose.yaml up -d --wait   # starts Postgres, Keycloak and the web app
+docker compose -f deploy/compose.yaml down           # stops them; add -v to delete their data
 ```
 
 ---

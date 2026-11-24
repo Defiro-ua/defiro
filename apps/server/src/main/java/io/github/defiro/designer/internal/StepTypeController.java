@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** The step palette: the plugins of the Registry's catalogue, each a type of step. */
-// Only a Workflow Manager designs workflows: the app role that identity turns into a role.
-@PreAuthorize("hasRole('WorkflowManager')")
+// Only a Workflow Manager designs workflows: a role identity reads from defiro's database.
+@PreAuthorize("hasRole('WORKFLOW_MANAGER')")
 @RestController
 class StepTypeController {
 

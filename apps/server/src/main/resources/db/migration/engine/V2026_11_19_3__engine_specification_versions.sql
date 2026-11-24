@@ -4,7 +4,7 @@ create table engine.specification_version (
     draft         uuid        not null,
     version       integer     not null,
     revision      integer     not null,
-    published_by  text        not null,
+    published_by  uuid        not null references identity.app_user (id),
     published_at  timestamptz not null default now(),
     specification jsonb       not null,
     primary key (draft, version),

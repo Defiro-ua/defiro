@@ -39,7 +39,7 @@ export function FieldList({
             <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-1">
               <span className="text-[15px] leading-[22px] font-semibold">{name}</span>
               <span className="flex flex-wrap items-center gap-1.5 text-label-sm text-ink-2">
-                <Chip icon="lock">Do perfil (IdP)</Chip>
+                <Chip icon="lock">Do perfil</Chip>
               </span>
             </span>
           </li>
@@ -102,7 +102,7 @@ export function FieldList({
       </button>
       <p className="m-0 flex items-start gap-2 text-[14px] leading-[21px] text-ink-2">
         <Icon name="lock" size={16} className="mt-px text-accent-ink" />
-        <span>Nome, unidade orgânica e chefia vêm do fornecedor de identidade (IdP). Entram sozinhos no pedido e não se editam aqui.</span>
+        <span>Nome, unidade orgânica e chefia vêm do perfil de quem pede, guardado na defiro. Entram sozinhos no pedido e não se editam aqui.</span>
       </p>
     </div>
   )

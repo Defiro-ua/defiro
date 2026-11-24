@@ -1,19 +1,19 @@
 package io.github.defiro.designer.internal;
 
-import static io.github.defiro.TestTokens.TRUSTED_KEY;
-import static io.github.defiro.TestTokens.bearer;
+import static io.github.defiro.TestPeople.signedInAs;
 import static io.github.defiro.designer.internal.WorkflowDraftTest.complete;
 import static io.github.defiro.designer.internal.WorkflowDraftTest.withSteps;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.defiro.TestTokens;
+import io.github.defiro.TestPeople;
 import io.github.defiro.TestcontainersConfiguration;
-import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -23,19 +23,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 // A workflow travels as a file: the published version goes out, and a file comes in as a new draft.
-@Import({TestcontainersConfiguration.class, TestTokens.TrustedIssuer.class})
+@Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
 class DraftFilesIT {
-
-    static final String SOFIA = bearer(
-            TRUSTED_KEY,
-            claims -> claims.subject("sofia.almeida")
-                    .claim("name", "Sofia Almeida")
-                    .claim("roles", List.of("WorkflowManager")));
 
     @Autowired
     MockMvc mvc;
@@ -43,14 +38,30 @@ class DraftFilesIT {
     @Autowired
     Drafts drafts;
 
+    @Autowired
+    JdbcClient jdbc;
+
+    TestPeople people;
+    UUID sofia;
+
+    @BeforeEach
+    void sofiaIsAWorkflowManager() {
+        people = new TestPeople(jdbc);
+        people.clear();
+        sofia = people.register("Sofia Almeida", "sofia.almeida@cm.test");
+        people.grant(sofia, "WORKFLOW_MANAGER");
+    }
+
     @Test
     void theFileOfAWorkflowIsNamedAfterItAndItsVersion() throws Exception {
         UUID id = drafts.add(WorkflowDraftTest.named("Ajudas de custo – Ação Social", complete("Validação da chefia")))
                 .id();
-        mvc.perform(post("/api/designer/drafts/" + id + "/publish").header(HttpHeaders.AUTHORIZATION, SOFIA))
+        mvc.perform(post("/api/designer/drafts/" + id + "/publish")
+                        .with(signedInAs(sofia))
+                        .with(csrf()))
                 .andExpect(status().isCreated());
 
-        mvc.perform(get("/api/designer/drafts/" + id + "/specification").header(HttpHeaders.AUTHORIZATION, SOFIA))
+        mvc.perform(get("/api/designer/drafts/" + id + "/specification").with(signedInAs(sofia)))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
                                 HttpHeaders.CONTENT_DISPOSITION,
@@ -67,7 +78,7 @@ class DraftFilesIT {
     void aWorkflowNeverCreatedHasNoFile() throws Exception {
         UUID id = drafts.add(withSteps(complete("Validação da chefia"))).id();
 
-        mvc.perform(get("/api/designer/drafts/" + id + "/specification").header(HttpHeaders.AUTHORIZATION, SOFIA))
+        mvc.perform(get("/api/designer/drafts/" + id + "/specification").with(signedInAs(sofia)))
                 .andExpect(status().isNotFound());
     }
 
@@ -82,7 +93,8 @@ class DraftFilesIT {
                                         "options": ["Carro próprio", "Comboio"]}]}]}""";
 
         mvc.perform(post("/api/designer/drafts/import")
-                        .header(HttpHeaders.AUTHORIZATION, SOFIA)
+                        .with(signedInAs(sofia))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(file))
                 .andExpect(status().isCreated())
@@ -105,7 +117,8 @@ class DraftFilesIT {
             })
     void aFileThatIsNotAWorkflowIsRefused(String file, String message) throws Exception {
         mvc.perform(post("/api/designer/drafts/import")
-                        .header(HttpHeaders.AUTHORIZATION, SOFIA)
+                        .with(signedInAs(sofia))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(file))
                 .andExpect(status().isBadRequest())

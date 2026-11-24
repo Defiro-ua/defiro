@@ -32,7 +32,7 @@ export const fieldTitle = (q: Field) => q.label.trim() || 'Campo sem rótulo'
 
 export const answerTypeName = (type: FieldType) => answerTypes.find((a) => a.type === type)?.name ?? type
 
-/** What the form fills in from the requester's profile (the IdP): shown, never asked */
+/** What the form fills in from the requester's profile: shown, never asked */
 export const profileFields = ['Nome', 'Unidade orgânica', 'Chefia direta']
 
 /** One step of the path, as the Designer keeps it (GET and PUT /api/designer/drafts/{id}) */

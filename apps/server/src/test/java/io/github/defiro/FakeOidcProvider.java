@@ -1,14 +1,8 @@
 package io.github.defiro;
 
-import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.util.JSONObjectUtils;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -17,10 +11,7 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Base64;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,19 +20,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
 /**
- * Plays Microsoft Entra ID in tests: an OpenID Connect provider on a local port, so no test calls
- * Microsoft. It has a directory of {@link Account}s; whoever is chosen with {@link #signInAs} is
- * signed in at its authorization endpoint, with no sign-in screen. Its id tokens carry the claims
- * defiro reads from Entra ID: name, unit ({@code department}), job title, manager, app roles and
- * the object ids of the person's groups.
+ * Plays the organization's identity provider in tests: an OpenID Connect provider on a local port, so
+ * no test calls a real one. It has a directory of {@link Account}s; whoever is chosen with {@link
+ * #signInAs} is signed in at its authorization endpoint, with no sign-in screen. Its id tokens say
+ * only who the person is: sub, name, email and email_verified.
  */
-public final class FakeEntraId {
+public final class FakeOidcProvider {
 
     public static final String CLIENT_ID = "defiro-test";
-    public static final String CLIENT_SECRET = "fake-entra-id-test-secret";
-    public static final String REGISTRATION_ID = "entra";
+    public static final String CLIENT_SECRET = "fake-oidc-provider-test-secret";
+    public static final String REGISTRATION_ID = "oidc";
 
-    private static final FakeEntraId INSTANCE = new FakeEntraId();
+    private static final FakeOidcProvider INSTANCE = new FakeOidcProvider();
 
     private final RSAKey key = TestTokens.newKey();
     private final HttpServer server;
@@ -49,29 +39,18 @@ public final class FakeEntraId {
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private volatile String signingIn;
 
-    /**
-     * A person in the organization's directory. {@code appRole} is null for people with none;
-     * {@code groups} are the names of the groups they belong to.
-     */
-    public record Account(
-            String name, String unit, String jobTitle, String manager, String appRole, List<String> groups) {
+    /** Someone's account at the provider. */
+    public record Account(String name, String email, boolean emailVerified) {
 
-        public Account {
-            groups = List.copyOf(groups);
-        }
-
-        public Account(String name, String unit, String jobTitle, String manager, String appRole) {
-            this(name, unit, jobTitle, manager, appRole, List.of());
-        }
-
-        String id() {
-            return UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)).toString();
+        /** What the provider calls this account. Never an id of defiro's: it is not even a UUID. */
+        public String subject() {
+            return "fake-idp|" + Integer.toHexString(email.hashCode());
         }
     }
 
     private record Grant(Account account, String nonce) {}
 
-    private FakeEntraId() {
+    private FakeOidcProvider() {
         try {
             server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         } catch (IOException e) {
@@ -81,20 +60,21 @@ public final class FakeEntraId {
         server.createContext("/keys", this::keys);
         server.createContext("/authorize", this::authorize);
         server.createContext("/token", this::token);
+        server.createContext("/logout", this::logout);
         server.start();
     }
 
     /** The one provider every test shares; it starts on first use. */
-    public static FakeEntraId instance() {
+    public static FakeOidcProvider instance() {
         return INSTANCE;
     }
 
-    /** Points defiro at this provider, as the Entra ID environment variables do in production. */
+    /** Points defiro at this provider, as the environment variables do in production. */
     public static void register(DynamicPropertyRegistry registry) {
         String prefix = "spring.security.oauth2.client.";
         registry.add(prefix + "registration." + REGISTRATION_ID + ".client-id", () -> CLIENT_ID);
         registry.add(prefix + "registration." + REGISTRATION_ID + ".client-secret", () -> CLIENT_SECRET);
-        registry.add(prefix + "registration." + REGISTRATION_ID + ".scope", () -> "openid,profile");
+        registry.add(prefix + "registration." + REGISTRATION_ID + ".scope", () -> "openid,profile,email");
         registry.add(prefix + "provider." + REGISTRATION_ID + ".issuer-uri", INSTANCE::issuer);
     }
 
@@ -104,6 +84,10 @@ public final class FakeEntraId {
 
     public String authorizationEndpoint() {
         return issuer() + "/authorize";
+    }
+
+    public String endSessionEndpoint() {
+        return issuer() + "/logout";
     }
 
     /** Replaces the whole directory. */
@@ -119,15 +103,9 @@ public final class FakeEntraId {
     public Account account(String name) {
         Account account = directory.get(name);
         if (account == null) {
-            throw new IllegalArgumentException("No account in the fake Entra ID for " + name);
+            throw new IllegalArgumentException("No account in the fake provider for " + name);
         }
         return account;
-    }
-
-    /** The object id Entra ID gives the group with this name; tokens carry it, not the name. */
-    public static String groupId(String name) {
-        return UUID.nameUUIDFromBytes(("group:" + name).getBytes(StandardCharsets.UTF_8))
-                .toString();
     }
 
     /** The person the next authorization request signs in. */
@@ -142,10 +120,11 @@ public final class FakeEntraId {
         config.put("authorization_endpoint", authorizationEndpoint());
         config.put("token_endpoint", issuer() + "/token");
         config.put("jwks_uri", issuer() + "/keys");
+        config.put("end_session_endpoint", endSessionEndpoint());
         config.put("response_types_supported", List.of("code"));
         config.put("subject_types_supported", List.of("public"));
         config.put("id_token_signing_alg_values_supported", List.of("RS256"));
-        config.put("scopes_supported", List.of("openid", "profile"));
+        config.put("scopes_supported", List.of("openid", "profile", "email"));
         config.put("token_endpoint_auth_methods_supported", List.of("client_secret_basic"));
         json(exchange, 200, config);
     }
@@ -180,9 +159,21 @@ public final class FakeEntraId {
         response.put("access_token", UUID.randomUUID().toString());
         response.put("token_type", "Bearer");
         response.put("expires_in", 300);
-        response.put("scope", "openid profile");
+        response.put("scope", "openid profile email");
         response.put("id_token", idToken(grant));
         json(exchange, 200, response);
+    }
+
+    // RP-initiated logout: it needs to know whose session to end, and where to send the browser.
+    private void logout(HttpExchange exchange) throws IOException {
+        Map<String, String> query = form(exchange.getRequestURI().getRawQuery());
+        if (!query.containsKey("id_token_hint") || !query.containsKey("post_logout_redirect_uri")) {
+            json(exchange, 400, Map.of("error", "invalid_request"));
+            return;
+        }
+        exchange.getResponseHeaders().add("Location", query.get("post_logout_redirect_uri"));
+        exchange.sendResponseHeaders(302, -1);
+        exchange.close();
     }
 
     private boolean clientAuthenticated(HttpExchange exchange) {
@@ -193,38 +184,16 @@ public final class FakeEntraId {
     }
 
     private String idToken(Grant grant) {
-        Account account = grant.account();
-        Instant now = Instant.now();
-        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
-                .issuer(issuer())
-                .subject(account.id())
-                .audience(CLIENT_ID)
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plus(5, ChronoUnit.MINUTES)))
-                .claim("nonce", grant.nonce())
-                .claim("oid", account.id())
-                .claim("name", account.name())
-                .claim("department", account.unit())
-                .claim("jobTitle", account.jobTitle())
-                .claim("manager", account.manager())
-                .claim("roles", account.appRole() == null ? List.of() : List.of(account.appRole()));
-        // Like Entra ID, the claim is left out for someone in no group.
-        if (!account.groups().isEmpty()) {
-            claims.claim(
-                    "groups",
-                    account.groups().stream().map(FakeEntraId::groupId).toList());
-        }
-        try {
-            SignedJWT jwt = new SignedJWT(
-                    new JWSHeader.Builder(JWSAlgorithm.RS256)
-                            .keyID(key.getKeyID())
-                            .build(),
-                    claims.build());
-            jwt.sign(new RSASSASigner(key));
-            return jwt.serialize();
-        } catch (JOSEException e) {
-            throw new IllegalStateException(e);
-        }
+        return idToken(grant.account(), Map.of("nonce", grant.nonce()));
+    }
+
+    /** An ID token of this account, as this provider signs it, with these protocol claims too. */
+    public String idToken(Account account, Map<String, Object> protocol) {
+        Map<String, Object> claims = new LinkedHashMap<>(protocol);
+        claims.put("name", account.name());
+        claims.put("email", account.email());
+        claims.put("email_verified", account.emailVerified());
+        return TestTokens.idToken(key, issuer(), CLIENT_ID, account.subject(), claims);
     }
 
     private static Map<String, String> form(String encoded) {

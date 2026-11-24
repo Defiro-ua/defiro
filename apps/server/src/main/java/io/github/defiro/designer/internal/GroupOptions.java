@@ -1,14 +1,12 @@
 package io.github.defiro.designer.internal;
 
-import io.github.defiro.identity.directory.Directory;
-import io.github.defiro.identity.directory.Group;
 import java.util.List;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
  * Who can make a request and who can handle a step, as the designer offers them: the
- * organization's groups and units, from the directory, after the one that defiro works out itself.
+ * organization's groups, after the one that defiro works out itself.
  */
 @Component
 class GroupOptions {
@@ -17,10 +15,12 @@ class GroupOptions {
     static final Option REQUESTERS_MANAGERS =
             new Option("Chefias da unidade do requerente", "Calculado a partir da unidade de quem faz o pedido");
 
-    private final Directory directory;
+    private static final String NOTE = "Grupo da organização";
 
-    GroupOptions(Directory directory) {
-        this.directory = directory;
+    private final OrganizationGroups groups;
+
+    GroupOptions(OrganizationGroups groups) {
+        this.groups = groups;
     }
 
     /** An option, with a note on where it comes from */
@@ -39,9 +39,7 @@ class GroupOptions {
     }
 
     private Stream<Option> organization() {
-        return directory.groupsAndUnits().stream()
-                .map(group ->
-                        new Option(group.name(), group.kind() == Group.Kind.UNIT ? "Unidade do IdP" : "Grupo do IdP"));
+        return groups.names().stream().map(name -> new Option(name, NOTE));
     }
 
     private static List<String> names(List<Option> options) {

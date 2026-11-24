@@ -11,8 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.ClaimAccessor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,8 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
  * checks it and deploys it to the Engine. «Workflows» lists the drafts, with the version each one
  * was published as.
  */
-// Only a Workflow Manager designs workflows: the app role that identity turns into a role.
-@PreAuthorize("hasRole('WorkflowManager')")
+// Only a Workflow Manager designs workflows: a role identity reads from defiro's database.
+@PreAuthorize("hasRole('WORKFLOW_MANAGER')")
 @RestController
 @RequestMapping("/api/designer/drafts")
 class DraftController {
@@ -93,9 +92,9 @@ class DraftController {
     }
 
     @PostMapping("/{id}/publish")
-    ResponseEntity<Map<String, Integer>> publish(@PathVariable UUID id, @AuthenticationPrincipal ClaimAccessor user) {
-        Publisher.Who who = new Publisher.Who(user.getClaimAsString("sub"), user.getClaimAsString("name"));
-        int version = publisher.publish(id, who).orElseThrow(DraftController::notFound);
+    ResponseEntity<Map<String, Integer>> publish(@PathVariable UUID id, Authentication authentication) {
+        UUID person = UUID.fromString(authentication.getName());
+        int version = publisher.publish(id, person).orElseThrow(DraftController::notFound);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("version", version));
     }
 
