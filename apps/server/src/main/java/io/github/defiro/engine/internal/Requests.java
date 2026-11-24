@@ -108,6 +108,7 @@ class Requests {
                     .findFirst()
                     .flatMap(open -> decisions.reviewer(open.id()))
                     .orElse(null);
+            boolean mine = procedure.requester().equals(person.id());
             List<Resubmission> resubmissions = entries.stream()
                     .filter(entry -> Resubmission.ACTION.equals(entry.action()))
                     .map(entry -> json.convertValue(entry.details(), Resubmission.class))
@@ -134,20 +135,35 @@ class Requests {
                     reviewer,
                     // Their own notes, while they have the task; nobody else sees them (UC19)
                     task == null ? List.of() : notes.draftOf(task),
-                    candidateOf.map(open -> notesFrom(entries, open.id())).orElse(List.of()),
+                    candidateOf
+                            .map(open -> notesFrom(entries, open.id()))
+                            .orElseGet(() -> mine ? notesOfTheReturn(procedure, entries) : List.of()),
                     decision(procedure, entries),
-                    procedure.requester().equals(person.id()));
+                    mine);
         });
     }
 
-    // A returned or rejected procedure has the status of the decision that left it so
-    private static Decision decision(Procedure procedure, List<AuditLog.Entry> entries) {
+    // While the request is returned, the requester has the notes of who returned it, and only those:
+    // a rejection sends none (UC19)
+    private List<Notes.NoteFrom> notesOfTheReturn(Procedure procedure, List<AuditLog.Entry> entries) {
+        return ending(procedure, entries)
+                .filter(entry -> Decisions.RETURNED.equals(entry.action()))
+                .map(entry -> notes.sentWith(UUID.fromString(entry.entity())))
+                .orElse(List.of());
+    }
+
+    // What returned or rejected the request: the procedure has the status of that decision
+    private static Optional<AuditLog.Entry> ending(Procedure procedure, List<AuditLog.Entry> entries) {
         if (!Decisions.RETURNED.equals(procedure.status()) && !Decisions.REJECTED.equals(procedure.status())) {
-            return null;
+            return Optional.empty();
         }
         return entries.stream()
                 .filter(entry -> procedure.status().equals(entry.action()))
-                .reduce((first, second) -> second)
+                .reduce((first, second) -> second);
+    }
+
+    private static Decision decision(Procedure procedure, List<AuditLog.Entry> entries) {
+        return ending(procedure, entries)
                 .map(AuditLog.Entry::details)
                 .map(details -> new Decision(
                         details.get("name") + ", " + details.get("jobTitle"), Decisions.reasonsOf(details), (String)

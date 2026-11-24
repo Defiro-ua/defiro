@@ -14,6 +14,7 @@ import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.Transition;
 import io.github.defiro.spec.WorkflowSpecification;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,8 @@ import org.springframework.context.annotation.Import;
 class NotesIT {
 
     static final String NOTE = "Indicou 10/11/2026; o certificado de presença diz 09/11/2026.";
+    static final String INCORRECT = "Preenchido incorretamente";
+    static final String LATE = "Fora do prazo legal";
     static final Person RUI =
             new Person("rui", "Rui Matos", "Chefe de Divisão", "Divisão de Obras Municipais", List.of());
     static final Person SEGUNDA =
@@ -52,17 +55,21 @@ class NotesIT {
 
     final String reference = "IT-" + UUID.randomUUID().toString().substring(0, 8);
     ProcedureSeed.Submitted submitted;
+    StepSpecification review;
     UUID task;
 
     @BeforeEach
     void ruiTookTheRequestAnaSubmitted() {
         StepSpecification request = step("Pedido", "submission", "Todos os trabalhadores");
-        StepSpecification review = step("Validação da chefia", "review", "Divisão de Obras Municipais");
+        review = step("Validação da chefia", "review", "Divisão de Obras Municipais");
         StepSpecification finance = step("Verificação financeira", "final-validation", "Divisão Financeira");
         List<Transition> transitions = List.of(
                 new Transition(request.id(), "submitted", review.id()),
                 new Transition(review.id(), "approved", finance.id()),
-                new Transition(finance.id(), "approved", null));
+                new Transition(review.id(), "returned", request.id()),
+                new Transition(review.id(), "rejected", null),
+                new Transition(finance.id(), "approved", null),
+                new Transition(finance.id(), "returned", request.id()));
         UUID draft = UUID.randomUUID();
         int version = deployment.deploy(
                 new WorkflowSpecification(
@@ -195,6 +202,44 @@ class NotesIT {
         assertThat(mine()).isEmpty();
     }
 
+    @Test
+    void aReturnGivesTheRequesterTheNotesOfWhoReturnedItOnly() {
+        editor.put(task, "regresso", NOTE, RUI);
+        UUID next = decisions.approve(task, RUI).orElseThrow().nextTask();
+        decisions.take(next, CARLA);
+        editor.put(next, "regresso", "Outra", CARLA);
+
+        decisions.returnToRequester(next, List.of(INCORRECT), "", CARLA);
+
+        assertThat(asTheRequester().notesFrom())
+                .containsExactly(
+                        new NoteFrom("regresso", "Regresso", "Outra", "Carla Dias, Técnica da Divisão Financeira"));
+    }
+
+    @Test
+    void aRejectionGivesTheRequesterNoNotes() {
+        editor.put(task, "regresso", NOTE, RUI);
+
+        decisions.reject(task, List.of(LATE), "Mensagem de rejeição", RUI);
+
+        assertThat(asTheRequester().notesFrom()).isEmpty();
+    }
+
+    @Test
+    void theRequesterNoLongerHasThemOnceTheRequestIsResubmitted() {
+        editor.put(task, "regresso", NOTE, RUI);
+        decisions.returnToRequester(task, List.of(INCORRECT), "", RUI);
+        RequestData.Requester ana = asTheRequester().requester();
+
+        seed.resubmit(submitted, ana, List.of(), Map.of(), review);
+
+        assertThat(asTheRequester().notesFrom()).isEmpty();
+    }
+
+    private Requests.Request asTheRequester() {
+        return requests.open(reference, requester()).orElseThrow();
+    }
+
     private List<Note> mine() {
         return requests.open(reference, RUI).orElseThrow().notes();
     }
@@ -210,7 +255,7 @@ class NotesIT {
                 name,
                 handledBy,
                 null,
-                List.of(),
-                List.of());
+                List.of(INCORRECT),
+                List.of(LATE));
     }
 }

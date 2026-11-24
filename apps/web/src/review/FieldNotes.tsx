@@ -22,7 +22,7 @@ type Props = {
   label: string
   /** The reviewer's own note on this field, if any */
   mine?: Note
-  /** The notes the previous reviewer sent on this field */
+  /** The notes sent on this field: the previous reviewer's or, for the requester, of who returned it */
   from: SentNote[]
   /** The requester's full name, for the delete confirmation */
   requester: string

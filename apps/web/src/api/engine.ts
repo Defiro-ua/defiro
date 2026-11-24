@@ -39,7 +39,7 @@ export type ReviewRequest = {
   reviewer: string | null
   /** This person's notes on the task they took, still theirs alone */
   notes: Note[]
-  /** The notes the previous reviewer sent with their approval */
+  /** The notes the previous reviewer sent with their approval or, for the requester, with the return */
   notesFrom: NoteFrom[]
   /** The decision, while the request is returned or rejected */
   decision: Decision | null
