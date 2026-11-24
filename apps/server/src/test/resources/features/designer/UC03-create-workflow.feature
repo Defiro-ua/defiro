@@ -37,7 +37,7 @@ Feature: Create workflow
 
     Scenario: The first screen asks for the name
       When she starts creating a workflow
-      Then she sees the screen for the name with «Passo 1 de 4»
+      Then she sees the screen for the name with «Passo 1 de 5»
 
   @browser
   Rule: «Anterior» goes back without losing answers, and «Sair» leaves the designer

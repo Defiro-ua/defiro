@@ -57,6 +57,9 @@ class DraftFilesIT {
                                 "attachment; filename=\"ajudas-de-custo-acao-social-v1.json\""))
                 .andExpect(jsonPath("$.schemaVersion").value(1))
                 .andExpect(jsonPath("$.name").value("Ajudas de custo – Ação Social"))
+                .andExpect(jsonPath("$.steps[0].fields[0].label").value("Material pedido"))
+                .andExpect(jsonPath("$.steps[0].fields[0].type").value("short-text"))
+                .andExpect(jsonPath("$.steps[1].fields").isEmpty())
                 .andExpect(jsonPath("$.transitions").isNotEmpty());
     }
 
@@ -74,7 +77,9 @@ class DraftFilesIT {
                 {"schemaVersion": 1, "name": "Horas extraordinárias", "transitions": [],
                  "steps": [{"id": "pedido", "plugin": {"name": "submission", "version": "0.1.0"}, "name": "Pedido",
                             "handledBy": "Todos os trabalhadores", "deadline": null,
-                            "returnReasons": [], "rejectReasons": []}]}""";
+                            "returnReasons": [], "rejectReasons": [],
+                            "fields": [{"id": "q1", "label": "Transporte", "type": "single-choice", "required": true,
+                                        "options": ["Carro próprio", "Comboio"]}]}]}""";
 
         mvc.perform(post("/api/designer/drafts/import")
                         .header(HttpHeaders.AUTHORIZATION, SOFIA)
@@ -83,6 +88,8 @@ class DraftFilesIT {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Horas extraordinárias"))
                 .andExpect(jsonPath("$.steps[0].name").value("Pedido"))
+                .andExpect(jsonPath("$.steps[0].fields[0].label").value("Transporte"))
+                .andExpect(jsonPath("$.steps[0].fields[0].options[1]").value("Comboio"))
                 .andExpect(jsonPath("$.revision").value(1))
                 .andExpect(jsonPath("$.publishedVersion").doesNotExist());
     }

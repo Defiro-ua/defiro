@@ -26,6 +26,12 @@ API, for Workflow Managers only:
 | `steps[].deadline` | The legal deadline in working days, from 1 to 90; `null` for the request. |
 | `steps[].returnReasons` | Why the step may return the request to the requester, to be corrected. |
 | `steps[].rejectReasons` | Why the step may reject the request for good. |
+| `steps[].fields` | The questions of the request form (UC04). Only the request has them, and it asks at least one; the other steps have `[]`. Name, organizational unit and manager are never questions: they come from the requester's profile. |
+| `steps[].fields[].id` | The question's id, unique in the step. |
+| `steps[].fields[].label` | The question, as the requester reads it, for example «Material pedido». |
+| `steps[].fields[].type` | The answer type: `short-text`, `long-text`, `number`, `date`, `date-time`, `yes-no`, `single-choice` or `files`. |
+| `steps[].fields[].required` | Whether the requester must answer it; an optional one says «(opcional)» in the form. |
+| `steps[].fields[].options` | The answers to choose from, at least two, for a `single-choice`; `[]` otherwise. |
 | `transitions` | Where a request goes when a step ends with an outcome: `{ "from", "outcome", "to" }`, `to` being `null` when the procedure ends. |
 
 The transitions follow the path: «approved» goes to the next step, «returned» back to the request, «rejected» to the end. A loaded file's transitions are not read: the Designer makes them again from the order of the steps when publishing, so a file may leave them out.
@@ -44,7 +50,13 @@ The transitions follow the path: «approved» goes to the next step, «returned�
       "handledBy": "Todos os trabalhadores",
       "deadline": null,
       "returnReasons": [],
-      "rejectReasons": []
+      "rejectReasons": [],
+      "fields": [
+        { "id": "local", "label": "Local da deslocação", "type": "short-text", "required": true, "options": [] },
+        { "id": "transporte", "label": "Transporte", "type": "single-choice", "required": true,
+          "options": ["Carro próprio", "Transportes públicos", "Viatura da câmara"] },
+        { "id": "justificacao", "label": "Justificação", "type": "long-text", "required": false, "options": [] }
+      ]
     },
     {
       "id": "chefia",
@@ -53,7 +65,8 @@ The transitions follow the path: «approved» goes to the next step, «returned�
       "handledBy": "Chefias da unidade do requerente",
       "deadline": 5,
       "returnReasons": ["Preenchido incorretamente"],
-      "rejectReasons": ["Pedido não autorizado"]
+      "rejectReasons": ["Pedido não autorizado"],
+      "fields": []
     },
     {
       "id": "final",
@@ -62,7 +75,8 @@ The transitions follow the path: «approved» goes to the next step, «returned�
       "handledBy": "Divisão Financeira",
       "deadline": 10,
       "returnReasons": ["Preenchido incorretamente"],
-      "rejectReasons": ["Pedido não autorizado"]
+      "rejectReasons": ["Pedido não autorizado"],
+      "fields": []
     }
   ],
   "transitions": [

@@ -1,5 +1,6 @@
 package io.github.defiro.designer.internal;
 
+import io.github.defiro.spec.FieldSpecification;
 import io.github.defiro.spec.PluginRef;
 import io.github.defiro.spec.StepSpecification;
 import io.github.defiro.spec.Transition;
@@ -30,7 +31,7 @@ record WorkflowDraft(String name, List<Step> steps) {
     /** A new draft: its path holds the request, which every employee can make. */
     static WorkflowDraft named(String name, PluginRef submission) {
         Step request = new Step(
-                UUID.randomUUID().toString(), submission, "Pedido", "Todos os trabalhadores", null, null, null);
+                UUID.randomUUID().toString(), submission, "Pedido", "Todos os trabalhadores", null, null, null, null);
         return new WorkflowDraft(name, List.of(request));
     }
 
@@ -48,7 +49,8 @@ record WorkflowDraft(String name, List<Step> steps) {
                         step.handledBy(),
                         step.deadline(),
                         step.returnReasons(),
-                        step.rejectReasons()))
+                        step.rejectReasons(),
+                        step.fields()))
                 .toList();
         return new WorkflowDraft(file.name(), path);
     }
@@ -69,6 +71,9 @@ record WorkflowDraft(String name, List<Step> steps) {
         for (int k = 0; k < steps.size(); k++) {
             problems.addAll(problemsOfStep(k, catalogue));
         }
+        if (!steps.isEmpty()) {
+            problems.addAll(problemsOfForm(steps.getFirst().fields()));
+        }
         return problems;
     }
 
@@ -87,7 +92,8 @@ record WorkflowDraft(String name, List<Step> steps) {
                         step.handledBy(),
                         step.deadline(),
                         step.returnReasons(),
-                        step.rejectReasons()))
+                        step.rejectReasons(),
+                        published(step.fields())))
                 .toList();
         List<Transition> transitions = new ArrayList<>();
         String request = steps.getFirst().id();
@@ -104,6 +110,26 @@ record WorkflowDraft(String name, List<Step> steps) {
             }
         }
         return new WorkflowSpecification(WorkflowSpecification.SCHEMA_VERSION, name, path, transitions);
+    }
+
+    /**
+     * The questions as the request form shows them: a single choice offers the options written, and
+     * no other answer type has options, whatever the draft still keeps from an earlier type.
+     */
+    private static List<FieldSpecification> published(List<FieldSpecification> fields) {
+        return fields.stream()
+                .map(question -> new FieldSpecification(
+                        question.id(),
+                        question.label(),
+                        question.type(),
+                        question.required(),
+                        FieldSpecification.SINGLE_CHOICE.equals(question.type())
+                                ? question.options().stream()
+                                        .filter(option -> !isBlank(option))
+                                        .map(String::trim)
+                                        .toList()
+                                : List.of()))
+                .toList();
     }
 
     private boolean startsWithTheOnlyRequest() {
@@ -133,6 +159,9 @@ record WorkflowDraft(String name, List<Step> steps) {
         if (!is(step, SUBMISSION)) {
             problems.addAll(problemsOfDecision(step, field, where));
         }
+        if (k > 0 && !step.fields().isEmpty()) {
+            problems.add(new Problem(field + ".fields", where + "só o pedido tem perguntas."));
+        }
         return problems;
     }
 
@@ -152,6 +181,42 @@ record WorkflowDraft(String name, List<Step> steps) {
                 unnamed(step.returnReasons(), field + ".returnReasons", where + "dê um nome ao motivo de devolução "));
         problems.addAll(
                 unnamed(step.rejectReasons(), field + ".rejectReasons", where + "dê um nome ao motivo de rejeição "));
+        return problems;
+    }
+
+    /**
+     * The request form asks at least one question (UC04, criterion 7), and each question has a
+     * label, an answer type that exists and, for a single choice, at least two options.
+     */
+    private static List<Problem> problemsOfForm(List<FieldSpecification> fields) {
+        String form = "Formulário do pedido";
+        if (fields.isEmpty()) {
+            return List.of(
+                    new Problem(
+                            "steps[0].fields",
+                            form
+                                    + ": ainda não tem perguntas para quem faz o pedido… crie pelo menos uma pergunta, por exemplo «Material pedido»"));
+        }
+        List<Problem> problems = new ArrayList<>();
+        for (int j = 0; j < fields.size(); j++) {
+            FieldSpecification question = fields.get(j);
+            String at = "steps[0].fields[" + j + "]";
+            String where = form + ", campo " + (j + 1)
+                    + (isBlank(question.label()) ? "" : " («" + question.label() + "»)") + ": ";
+            if (isBlank(question.label())) {
+                problems.add(new Problem(at + ".label", where + "falta o rótulo."));
+            }
+            if (!FieldSpecification.TYPES.contains(question.type())) {
+                problems.add(
+                        new Problem(at + ".type", where + "o tipo de resposta " + question.type() + " não existe."));
+            } else if (FieldSpecification.SINGLE_CHOICE.equals(question.type())
+                    && question.options().stream()
+                                    .filter(option -> !isBlank(option))
+                                    .count()
+                            < 2) {
+                problems.add(new Problem(at + ".options", where + "faltam opções de resposta (pelo menos duas)."));
+            }
+        }
         return problems;
     }
 

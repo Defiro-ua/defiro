@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/designer'
 import type { StoredDraft } from '../api/designer'
 import type { Profile } from '../api/session'
-import type { Step } from '../designer/draft'
+import type { Field, Step } from '../designer/draft'
 import { DesignerPage } from './DesignerPage'
 
 vi.mock('../api/designer')
@@ -15,6 +15,8 @@ const review = { name: 'review', version: '0.1.0' }
 const finalValidation = { name: 'final-validation', version: '0.1.0' }
 const decisions = ['approved', 'returned', 'rejected']
 
+const material: Field = { id: 'material', label: 'Material pedido', type: 'short-text', required: true, options: [] }
+
 const request: Step = {
   id: 'pedido',
   plugin: submission,
@@ -23,6 +25,7 @@ const request: Step = {
   deadline: null,
   returnReasons: [],
   rejectReasons: [],
+  fields: [material],
 }
 
 const reviewStep = (id: string, name: string): Step => ({
@@ -33,6 +36,7 @@ const reviewStep = (id: string, name: string): Step => ({
   deadline: 5,
   returnReasons: ['Preenchido incorretamente'],
   rejectReasons: ['Pedido não autorizado'],
+  fields: [],
 })
 
 const stored = (name: string, ...steps: Step[]): StoredDraft => ({
@@ -90,13 +94,13 @@ beforeEach(() => {
 afterEach(() => vi.resetAllMocks())
 
 describe('creating a workflow', () => {
-  it('starts a draft and opens it on the name, the first of four screens', async () => {
+  it('starts a draft and opens it on the name, the first of five screens', async () => {
     vi.mocked(api.startDraft).mockResolvedValue(stored(''))
     vi.mocked(api.loadDraft).mockResolvedValue(stored(''))
     open('/workflows/criar')
 
     expect(await question()).toHaveTextContent('Como se chama o workflow?')
-    expect(screen.getByText('Passo 1 de 4')).toBeInTheDocument()
+    expect(screen.getByText('Passo 1 de 5')).toBeInTheDocument()
     expect(api.startDraft).toHaveBeenCalledWith('')
     expect(api.loadDraft).toHaveBeenCalledWith('d1')
   })
@@ -121,7 +125,7 @@ describe('creating a workflow', () => {
     await goOn(user)
 
     expect(await question()).toHaveTextContent('Quem pode fazer este pedido?')
-    expect(screen.getByText('Passo 2 de 4')).toBeInTheDocument()
+    expect(screen.getByText('Passo 2 de 5')).toBeInTheDocument()
     expect(api.saveDraft).toHaveBeenCalledWith('d1', expect.objectContaining({ name: 'Ajudas de custo' }))
     await user.click(screen.getByRole('button', { name: 'Anterior' }))
     expect(await screen.findByLabelText(/Nome do workflow/)).toHaveValue('Ajudas de custo')
@@ -134,7 +138,7 @@ describe('creating a workflow', () => {
 
     await user.click(screen.getByRole('button', { name: /^Revisão/ }))
     expect(await question()).toHaveTextContent('Como se chama o passo 2 e quem o trata?')
-    expect(screen.getByText('Passo 3 de 4')).toBeInTheDocument()
+    expect(screen.getByText('Passo 3 de 5')).toBeInTheDocument()
     const name = screen.getByLabelText(/Nome do passo/)
     await user.clear(name)
     await user.type(name, 'Validação da chefia')
@@ -226,7 +230,7 @@ describe('creating a workflow', () => {
     vi.mocked(api.publishDraft).mockResolvedValue({ published: true, version: 1 })
     const user = open('/workflows/criar/d1?ecra=rever')
     expect(await question()).toHaveTextContent('Confira o workflow antes de o criar')
-    expect(screen.getByText('Passo 4 de 4')).toBeInTheDocument()
+    expect(screen.getByText('Passo 5 de 5')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Criar workflow' }))
 
@@ -330,5 +334,137 @@ describe('creating a workflow', () => {
     await question()
 
     expect(screen.getByRole('link', { name: /Sair/ })).toHaveAttribute('href', '/workflows')
+  })
+})
+
+const asking = (...fields: Field[]): StoredDraft => {
+  const d = stored('Ajudas de custo', reviewStep('a', 'Validação da chefia'))
+  return { ...d, steps: [{ ...request, fields }, ...d.steps.slice(1)] }
+}
+const questionRows = () =>
+  within(screen.getByRole('list', { name: 'Campos do formulário' }))
+    .getAllByRole('listitem')
+    .filter((row) => !row.textContent?.includes('Do perfil (IdP)'))
+const savedFields = () => vi.mocked(api.saveDraft).mock.calls.at(-1)?.[1].steps[0].fields
+
+describe('the request form', () => {
+  it('comes after the path, the fourth of five screens', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material))
+    const user = open('/workflows/criar/d1?ecra=percurso')
+    await question()
+
+    await goOn(user)
+
+    expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
+    expect(screen.getByText('Passo 4 de 5')).toBeInTheDocument()
+  })
+
+  it('starts with name, unit and manager from the profile, which cannot be changed', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material))
+    open('/workflows/criar/d1?ecra=campos')
+    await question()
+
+    const rows = within(screen.getByRole('list', { name: 'Campos do formulário' })).getAllByRole('listitem')
+    expect(rows.slice(0, 3).map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^1Nome.*Do perfil \(IdP\)/),
+      expect.stringMatching(/^2Unidade orgânica.*Do perfil \(IdP\)/),
+      expect.stringMatching(/^3Chefia direta.*Do perfil \(IdP\)/),
+    ])
+    rows.slice(0, 3).forEach((row) => expect(within(row).queryByRole('button')).not.toBeInTheDocument())
+    expect(rows[3]).toHaveTextContent('Material pedido · obrigatório')
+    expect(rows[3]).toHaveTextContent('Texto curto')
+  })
+
+  it('adds a question on its own screen: its label, its answer type from the cards and whether it is mandatory', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material))
+    const user = open('/workflows/criar/d1?ecra=campos')
+    await question()
+
+    await user.click(screen.getByRole('button', { name: 'Acrescentar campo' }))
+    expect(await question()).toHaveTextContent('Como é o novo campo?')
+    expect(within(screen.getByRole('group', { name: /^Tipo de resposta/ })).getAllByRole('radio')).toHaveLength(8)
+    await user.type(screen.getByLabelText(/^Rótulo/), 'Transporte')
+    await user.click(screen.getByRole('radio', { name: /^Escolha única/ }))
+    await user.type(screen.getByLabelText(/^Opções de resposta/), 'Carro próprio{enter}Comboio')
+    await user.click(screen.getByRole('checkbox', { name: /^Resposta obrigatória/ }))
+    await user.click(screen.getByRole('button', { name: 'Guardar o campo' }))
+
+    expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
+    expect(questionRows()[1]).toHaveTextContent('Transporte · obrigatório')
+    expect(savedFields()?.[1]).toMatchObject({ label: 'Transporte', type: 'single-choice', required: true, options: ['Carro próprio', 'Comboio'] })
+  })
+
+  it('does not save a question with no label or a single choice with one option, and says why', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking({ ...material, label: '', type: 'single-choice', options: ['Carro'] }))
+    const user = open('/workflows/criar/d1?ecra=campo:material')
+    await question()
+
+    await user.click(screen.getByRole('button', { name: 'Guardar o campo' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Para continuar, corrija as 2 coisas assinaladas.')
+    expect(screen.getByLabelText(/^Rótulo/)).toHaveAccessibleDescription(/falta o rótulo/)
+    expect(screen.getByLabelText(/^Opções de resposta/)).toHaveAccessibleDescription(/faltam opções de resposta/)
+    expect(await question()).toHaveTextContent('Como é o novo campo?')
+    expect(api.saveDraft).not.toHaveBeenCalled()
+  })
+
+  it('flags a question with no label in the list', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material, { ...material, id: 'q2', label: '' }))
+    open('/workflows/criar/d1?ecra=campos')
+    await question()
+
+    expect(questionRows()[1]).toHaveTextContent('Campo sem rótulo')
+    expect(questionRows()[1]).toHaveTextContent('Falta o rótulo')
+  })
+
+  it('moves a question up and removes one', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking({ ...material, id: 'a', label: 'Local da deslocação' }, { ...material, id: 'b', label: 'Transporte' }))
+    const user = open('/workflows/criar/d1?ecra=campos')
+    await question()
+    expect(screen.getByRole('button', { name: 'Mover «Local da deslocação» para cima' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Mover «Transporte» para baixo' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Mover «Transporte» para cima' }))
+    expect(questionRows().map((r) => r.textContent)).toEqual([expect.stringContaining('Transporte'), expect.stringContaining('Local da deslocação')])
+    await user.click(screen.getByRole('button', { name: 'Mover «Local da deslocação» para cima' }))
+    await user.click(screen.getByRole('button', { name: 'Remover o campo «Transporte»' }))
+
+    expect(questionRows()).toHaveLength(1)
+    expect(questionRows()[0]).toHaveTextContent('Local da deslocação')
+  })
+
+  it('opens a question to change it, and «Anterior» goes back to the list', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material))
+    const user = open('/workflows/criar/d1?ecra=campos')
+    await question()
+
+    await user.click(screen.getByRole('button', { name: 'Alterar Material pedido' }))
+    expect(await question()).toHaveTextContent('Como é o campo «Material pedido»?')
+    await user.click(screen.getByRole('button', { name: 'Anterior' }))
+
+    expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
+  })
+
+  it('does not move on without a question for the requester', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking())
+    const user = open('/workflows/criar/d1?ecra=campos')
+    await question()
+
+    await goOn(user)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Formulário do pedido: ainda não tem perguntas para quem faz o pedido')
+    expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
+  })
+
+  it('is part of the review', async () => {
+    vi.mocked(api.loadDraft).mockResolvedValue(asking(material, { ...material, id: 'q2', label: 'Justificação', type: 'long-text', required: false }))
+    const user = open('/workflows/criar/d1?ecra=rever')
+    await question()
+
+    const form = screen.getByRole('region', { name: 'Formulário do pedido' })
+    expect(form).toHaveTextContent('Material pedidoTexto curto · obrigatório')
+    expect(form).toHaveTextContent('JustificaçãoTexto longo · opcional')
+    await user.click(within(form).getByRole('button', { name: 'Alterar Formulário do pedido' }))
+    expect(await question()).toHaveTextContent('Que dados pede ao requerente?')
   })
 })
