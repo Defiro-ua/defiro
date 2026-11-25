@@ -1,8 +1,9 @@
 -- The Engine's data, as the architecture design (2026-10-19, §5) gives it to each component:
 -- Instance Runtime owns procedures, their participants and their data versions; Task Management owns
 -- tasks; Audit Log owns the history.
--- People are kept by their internal code in defiro (identity.app_user), never by their
--- identity-provider account. There is no foreign key to it: each module owns its own schema.
+-- People are kept by their internal code in defiro (the id of identity.app_user, which UC01 adds),
+-- never by their identity-provider account. There is no foreign key to it: each module owns its own
+-- schema.
 
 -- A procedure: one request on one version of a workflow, from the moment the requester starts it
 -- until it ends. It keeps its own copy of the specification it started with, so later versions only
