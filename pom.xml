@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.2</version>
+        <version>4.2.0</version>
         <relativePath/>
     </parent>
 
@@ -31,7 +31,7 @@
         <!-- CVE-2026-110879 is fixed in 3.1.8; Boot 4.1.2 ships 3.1.7. Remove once Boot manages >= 3.1.8. -->
         <jackson-bom.version>3.1.8</jackson-bom.version>
         <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
-        <sonar-maven-plugin.version>5.8.0.7211</sonar-maven-plugin.version>
+        <sonar-maven-plugin.version>5.9.0.7382</sonar-maven-plugin.version>
         <spotless-maven-plugin.version>3.11.0</spotless-maven-plugin.version>
         <palantir-java-format.version>2.103.0</palantir-java-format.version>
 

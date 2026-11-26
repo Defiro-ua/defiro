@@ -17,9 +17,9 @@
     <properties>
         <spring-modulith.version>2.1.2</spring-modulith.version>
         <!-- Acceptance tests: Cucumber scenarios over the REST API. Spring Boot manages neither. -->
-        <cucumber.version>8.0.4</cucumber.version>
+        <cucumber.version>8.1.0</cucumber.version>
         <rest-assured.version>6.3.0</rest-assured.version>
-        <playwright.version>1.64.0</playwright.version>
+        <playwright.version>1.65.1</playwright.version>
     </properties>
 
     <dependencies>
