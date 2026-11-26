@@ -13,14 +13,18 @@ create table engine.procedure (
     draft         uuid        not null,
     version       integer     not null,
     specification jsonb       not null,
-    -- given when the request is submitted, for example AC-2026-0147
-    reference     text        unique,
+    -- given when the request is started, for example AC-2026-0147. A request that is never
+    -- submitted keeps its number, so the numbering can have gaps.
+    reference     text        not null unique,
     state         text        not null default 'started'
         check (state in ('started', 'in-progress', 'returned', 'rejected', 'closed')),
     current_step  text        not null,
     requester     uuid        not null,
     started_at    timestamptz not null default now(),
-    submitted_at  timestamptz
+    submitted_at  timestamptz,
+    -- when it ended, rejected or closed; empty again when that ending is undone
+    closed_at     timestamptz,
+    check ((state in ('rejected', 'closed')) = (closed_at is not null))
 );
 
 -- «Os meus pedidos»: the procedures someone requested
@@ -37,11 +41,15 @@ create table engine.participant (
 create index participant_by_person on engine.participant (person);
 
 -- The answers of a request: version 1 when it is submitted, one more each time it is corrected and
--- sent again (UC20).
+-- sent again (UC20). The answers are kept by the field's id in the specification, with typed values
+-- (text, numbers, dates and times as ISO 8601, lists); their labels come from the procedure's own
+-- copy of the specification. The requester is kept as they were at that submission: name, job
+-- title, unit and manager.
 create table engine.request_data (
     procedure    uuid        not null references engine.procedure (id),
     version      integer     not null check (version > 0),
-    answers      jsonb       not null,
+    answers      jsonb       not null check (jsonb_typeof(answers) = 'object'),
+    requester    jsonb       not null check (jsonb_typeof(requester) = 'object'),
     submitted_at timestamptz not null default now(),
     primary key (procedure, version)
 );
@@ -84,7 +92,10 @@ create table engine.audit_entry (
     actor      uuid        not null,
     actor_role text        not null check (actor_role in ('requester', 'reviewer')),
     action     text        not null
-        check (action in ('submitted', 'approved', 'returned', 'rejected', 'resubmitted', 'closed', 'failed')),
+        check (action in ('submitted', 'approved', 'returned', 'rejected', 'resubmitted', 'closed', 'failed',
+                          'undone')),
+    -- the task the entry is about: a decision on a task, or the undoing of that decision
+    task       uuid        references engine.task (id),
     -- what goes with the action, for example the reasons of a return or what failed
     details    jsonb
 );
