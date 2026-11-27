@@ -21,6 +21,7 @@ vi.mock('../api/engine', async (original) => ({
   undoDecision: vi.fn(),
   returnToRequester: vi.fn(),
   reject: vi.fn(),
+  fetchDocument: vi.fn(),
 }))
 
 // The mockup's people and request AC-2026-0147
@@ -113,7 +114,19 @@ function openAt(pathname: string, state?: unknown) {
   )
 }
 
-beforeEach(() => vi.mocked(api.listMyRequests).mockResolvedValue([]))
+// jsdom has neither a modal <dialog> nor blob URLs
+beforeEach(() => {
+  vi.mocked(api.listMyRequests).mockResolvedValue([])
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    this.dispatchEvent(new Event('close'))
+  }
+  URL.createObjectURL = vi.fn(() => 'blob:http://localhost/0147')
+  URL.revokeObjectURL = vi.fn()
+})
 afterEach(() => vi.resetAllMocks())
 
 describe('the inbox (until UC27)', () => {
@@ -438,13 +451,56 @@ describe('«Rever pedido» (UC17)', () => {
     vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
     vi.mocked(api.approve).mockResolvedValue({ done: true, result: { ...approved, nextStep: null, handledBy: null, nextTask: null } })
     vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.fetchDocument).mockResolvedValue({ blob: new Blob(['%PDF-1.4'], { type: 'application/pdf' }), filename: 'ordem_reembolso_AC-2026-0147.pdf' })
     openAt('/pedidos/AC-2026-0147')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Aprovar' }))
 
     expect(await screen.findByText('Procedimento fechado')).toBeInTheDocument()
     expect(screen.getByText(/AC-2026-0147: foi gerado o documento final\. Ana Ferreira \(Técnica Superior\) já o pode transferir\./)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ver documento' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ver documento' }))
+
+    expect(api.fetchDocument).toHaveBeenCalledWith('AC-2026-0147')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  const closing = { notice: { titulo: 'Procedimento fechado' }, undo: { task: 't1', reference: 'AC-2026-0147' }, document: 'AC-2026-0147' }
+
+  it('a refused undo of the closing replaces the notice, and «Ver documento» goes with it', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.undoDecision).mockResolvedValue({ done: false, reason: 'Já não é possível desfazer.' })
+    openAt('/caixa-de-tarefas', closing)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+
+    expect(await screen.findByText('Já não é possível desfazer.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver documento' })).not.toBeInTheDocument()
+  })
+
+  it('a failed undo of the closing does not keep «Ver documento» either', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.undoDecision).mockRejectedValue(new Error('POST answered 500'))
+    openAt('/caixa-de-tarefas', closing)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+
+    expect(await screen.findByText('Não foi possível desfazer')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver documento' })).not.toBeInTheDocument()
+  })
+
+  it('after undoing the closing, the procedure is open again and offers no document', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.undoDecision).mockResolvedValue({
+      done: true,
+      result: { task: 't1', reference: 'AC-2026-0147', step: 'Validação final', decision: 'approved' },
+    })
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    openAt('/caixa-de-tarefas', closing)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+
+    expect(await screen.findByText('Aprovação desfeita')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver documento' })).not.toBeInTheDocument()
   })
 
   it('when someone approved first, goes back to the inbox saying who, with no «Desfazer»', async () => {

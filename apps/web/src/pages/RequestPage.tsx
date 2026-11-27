@@ -24,9 +24,9 @@ import { cx } from '../lib/cx'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
 import {
+  approveFailed,
   approvedNotice,
   closedNotice,
-  approveFailed,
   dateTime,
   refusedNotice,
   rejectedNotice,

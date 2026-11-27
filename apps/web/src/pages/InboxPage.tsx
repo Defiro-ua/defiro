@@ -25,10 +25,15 @@ export function InboxPage() {
   const headingRef = useRef<HTMLHeadingElement>(null)
   useFocusOnArrival(headingRef)
   const arrived = useArrival()
-  const [notice, setNotice] = useState<Notice | null>(arrived.notice ?? null)
+  const [notice, setShown] = useState<Notice | null>(arrived.notice ?? null)
   const [undo, setUndo] = useState(arrived.undo)
   // The document «Ver documento» in the notice opens, after closing a procedure
   const [noticeDocument, setNoticeDocument] = useState(arrived.document)
+  // A notice replaces the one before it, and with it the document that one offered
+  const setNotice = (next: Notice | null) => {
+    setShown(next)
+    setNoticeDocument(undefined)
+  }
   const undoing = useRef(false)
   const [items, setItems] = useState<InboxItem[] | null | 'failed'>(null)
   // The request whose document is open on screen
@@ -87,7 +92,6 @@ export function InboxPage() {
         onClose={() => {
           setNotice(null)
           setUndo(undefined)
-          setNoticeDocument(undefined)
         }}
         onUndo={undo ? undoIt : undefined}
         onDoc={noticeDocument ? () => setDocumentOf(noticeDocument) : undefined}
@@ -166,14 +170,7 @@ export function InboxPage() {
         </section>
       )}
       <MyRequests onDocument={setDocumentOf} />
-      <DocumentDialog
-        reference={documentOf}
-        onClose={() => setDocumentOf(null)}
-        onSaved={(filename) => {
-          setNoticeDocument(undefined)
-          setNotice(savedNotice(filename))
-        }}
-      />
+      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={(filename) => setNotice(savedNotice(filename))} />
     </AppShell>
   )
 }
