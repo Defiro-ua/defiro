@@ -1,5 +1,7 @@
 package io.github.defiro.engine.internal;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -52,6 +54,44 @@ class Procedures {
                         row.getString("current_step_id"),
                         row.getString("status")))
                 .optional();
+    }
+
+    /**
+     * A request of this requester, as «Os meus pedidos» lists it. The names are the procedure's own
+     * version's, and the current step is null once it is closed.
+     */
+    record Mine(
+            String reference,
+            String workflow,
+            String status,
+            String currentStep,
+            OffsetDateTime closedAt,
+            boolean hasDocument) {}
+
+    /** The requester's procedures, the newest first: one query, reading the names off the specification. */
+    List<Mine> of(String requester) {
+        return jdbc.sql("""
+                        select p.reference,
+                               v.specification ->> 'name' as workflow,
+                               p.status,
+                               (select s ->> 'name' from jsonb_array_elements(v.specification -> 'steps') s
+                                where s ->> 'id' = p.current_step_id) as current_step,
+                               p.closed_at,
+                               (p.status = 'closed' and g.procedure_id is not null) as has_document
+                        from engine.procedure p
+                        join engine.specification_version v on v.draft = p.draft and v.version = p.version
+                        left join engine.generated_document g on g.procedure_id = p.id
+                        where p.requester_id = :requester
+                        order by p.created_at desc, p.id""")
+                .param("requester", requester)
+                .query((row, n) -> new Mine(
+                        row.getString("reference"),
+                        row.getString("workflow"),
+                        row.getString("status"),
+                        row.getString("current_step"),
+                        row.getObject("closed_at", OffsetDateTime.class),
+                        row.getBoolean("has_document")))
+                .list();
     }
 
     Optional<Procedure> find(UUID id) {
