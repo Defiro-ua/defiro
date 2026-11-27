@@ -2,16 +2,21 @@ package io.github.defiro.acceptance.engine;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
+import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.AriaRole;
+import com.microsoft.playwright.options.BoundingBox;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
 import io.cucumber.java.pt.E;
 import io.cucumber.java.pt.Então;
 import io.cucumber.java.pt.Quando;
 import io.github.defiro.acceptance.WebBrowser;
+import java.util.List;
 import java.util.regex.Pattern;
+import org.assertj.core.api.Assertions;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -24,6 +29,8 @@ public class DocumentoScreenSteps {
     private WebBrowser browser;
     private Page page;
     private String reference;
+    // The server's answer to the dialog's request for the document
+    private Response document;
 
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
@@ -63,6 +70,46 @@ public class DocumentoScreenSteps {
         // The row is there, so that nothing is missing only because the list has not loaded
         assertThat(row(reference)).isVisible();
         assertThat(documento(reference)).hasCount(0);
+    }
+
+    @Quando("{person} abre o documento de {string} em «Os meus pedidos»")
+    public void abreODocumento(String person, String reference) {
+        abreOsMeusPedidos(person);
+        document = page.waitForResponse(
+                response -> response.url().endsWith("/procedures/" + reference + "/document"),
+                () -> documento(reference).click());
+    }
+
+    @Então("vê no ecrã o PDF {string}")
+    public void veOPdf(String filename) {
+        Locator frame = dialog().locator("iframe[title='" + filename + "']");
+        assertThat(frame).isVisible();
+        Assertions.assertThat(document.status()).isEqualTo(200);
+        // The PDF loads in the frame itself, and is not sandboxed away (Review Focus 1)
+        Frame pdf = frame.elementHandle().contentFrame();
+        page.waitForCondition(() -> pdf.url().startsWith("blob:"));
+    }
+
+    @E("vê «Fechar» e «Transferir PDF» no topo")
+    public void veABarraNoTopo() {
+        BoundingBox pdf = dialog().locator("iframe").boundingBox();
+        for (Locator button : List.of(fechar(), transferir())) {
+            assertThat(button).isVisible();
+            Assertions.assertThat(button.boundingBox().y).isLessThan(pdf.y);
+        }
+    }
+
+    private Locator dialog() {
+        return page.getByRole(AriaRole.DIALOG);
+    }
+
+    private Locator fechar() {
+        return dialog().getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName(Pattern.compile("^Fechar")));
+    }
+
+    private Locator transferir() {
+        return dialog().getByRole(
+                        AriaRole.BUTTON, new Locator.GetByRoleOptions().setName(Pattern.compile("^Transferir PDF")));
     }
 
     // The row of the request, found by its reference

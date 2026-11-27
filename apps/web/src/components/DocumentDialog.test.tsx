@@ -1,0 +1,76 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '../api/engine'
+import { documentFailed } from '../review/notices'
+import { DocumentDialog } from './DocumentDialog'
+
+vi.mock('../api/engine', async (original) => ({ ...(await original<typeof import('../api/engine')>()), fetchDocument: vi.fn() }))
+
+const filename = 'ordem_reembolso_AC-2026-0098.pdf'
+const pdf = () => ({ blob: new Blob(['%PDF-1.4'], { type: 'application/pdf' }), filename })
+
+// jsdom has neither a modal <dialog> nor blob URLs
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    this.dispatchEvent(new Event('close'))
+  }
+  URL.createObjectURL = vi.fn(() => 'blob:http://localhost/0098')
+  URL.revokeObjectURL = vi.fn()
+})
+
+afterEach(() => vi.resetAllMocks())
+
+function show(reference: string | null = 'AC-2026-0098') {
+  return render(<DocumentDialog reference={reference} onClose={vi.fn()} onSaved={vi.fn()} />)
+}
+
+describe('DocumentDialog', () => {
+  it('showsThePdf', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    show()
+
+    const frame = await screen.findByTitle(filename)
+    expect(frame.tagName).toBe('IFRAME')
+    expect(frame.getAttribute('src')).toMatch(/^blob:/)
+  })
+
+  it('barHasBothButtons', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    show()
+
+    const bar = (await screen.findByRole('dialog')).firstElementChild?.firstElementChild as HTMLElement
+    expect(within(bar).getByRole('button', { name: /^Fechar/ })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: /^Transferir PDF/ })).toBeInTheDocument()
+  })
+
+  it('fetchesOnce', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    show()
+
+    await screen.findByTitle(filename)
+    expect(api.fetchDocument).toHaveBeenCalledTimes(1)
+    expect(api.fetchDocument).toHaveBeenCalledWith('AC-2026-0098')
+  })
+
+  it('failureShowsNotice', async () => {
+    vi.mocked(api.fetchDocument).mockRejectedValue(new Error('offline'))
+    show()
+
+    expect(await screen.findByText(documentFailed.titulo)).toBeInTheDocument()
+    expect(screen.queryByTitle(filename)).not.toBeInTheDocument()
+  })
+
+  it('revokesTheBlobUrlOnClose', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    const { rerender } = show()
+    await screen.findByTitle(filename)
+
+    rerender(<DocumentDialog reference={null} onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/0098'))
+  })
+})

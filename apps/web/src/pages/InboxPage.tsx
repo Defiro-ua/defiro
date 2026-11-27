@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { listInbox, take, undoDecision, type InboxItem } from '../api/engine'
 import { Button } from '../components/Button'
 import { Chip } from '../components/Chip'
+import { DocumentDialog } from '../components/DocumentDialog'
 import { Flash, type Notice } from '../components/Flash'
 import { Icon } from '../components/Icon'
 import { AppShell } from '../components/layout/AppShell'
@@ -28,6 +29,8 @@ export function InboxPage() {
   const [undo, setUndo] = useState(arrived.undo)
   const undoing = useRef(false)
   const [items, setItems] = useState<InboxItem[] | null | 'failed'>(null)
+  // The request whose document is open on screen
+  const [documentOf, setDocumentOf] = useState<string | null>(null)
 
   useEffect(() => {
     let current = true
@@ -158,8 +161,8 @@ export function InboxPage() {
           )}
         </section>
       )}
-      {/* The document opens on its own screen (UC23's DocumentDialog, next) */}
-      <MyRequests onDocument={() => {}} />
+      <MyRequests onDocument={setDocumentOf} />
+      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={() => {}} />
     </AppShell>
   )
 }

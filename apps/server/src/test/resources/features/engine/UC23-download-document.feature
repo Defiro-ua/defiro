@@ -58,7 +58,7 @@ Funcionalidade: Transferir um documento gerado
     # O ecrã mostra o próprio PDF, tal como foi guardado ao fechar. Se o dispositivo não consegue
     #   mostrar um PDF no ecrã, não há pré-visualização e o PDF é logo transferido.
 
-    @browser @wip
+    @browser
     Cenário: O documento abre no ecrã
       Quando Ana Ferreira abre o documento de "AC-2026-0098" em «Os meus pedidos»
       Então vê no ecrã o PDF "ordem_reembolso_AC-2026-0098.pdf"

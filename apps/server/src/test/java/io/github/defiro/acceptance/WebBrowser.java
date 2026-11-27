@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
@@ -37,7 +38,8 @@ public final class WebBrowser implements AutoCloseable {
     private static synchronized Browser chromium() {
         if (chromium == null) {
             Playwright playwright = Playwright.create();
-            chromium = playwright.chromium().launch();
+            // The full Chromium, in its new headless mode, which shows PDFs; the headless shell cannot (UC23)
+            chromium = playwright.chromium().launch(new BrowserType.LaunchOptions().setChannel("chromium"));
             Runtime.getRuntime().addShutdownHook(new Thread(playwright::close));
         }
         return chromium;
