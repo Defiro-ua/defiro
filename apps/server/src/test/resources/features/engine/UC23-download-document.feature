@@ -135,7 +135,6 @@ Funcionalidade: Transferir um documento gerado
         | Rui Matos     |
         | Carla Dias    |
 
-    @wip
     Cenário: Sem iniciar sessão não se pede o documento
       Quando alguém sem sessão iniciada pede o documento de "AC-2026-0098"
       Então é-lhe pedido que inicie sessão

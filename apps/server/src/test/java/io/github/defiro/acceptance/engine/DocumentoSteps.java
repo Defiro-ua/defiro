@@ -8,6 +8,7 @@ import io.cucumber.java.pt.E;
 import io.cucumber.java.pt.Então;
 import io.cucumber.java.pt.Quando;
 import io.github.defiro.acceptance.AccessSteps;
+import io.github.defiro.acceptance.Browser;
 import io.github.defiro.acceptance.identity.IdentitySteps;
 import io.github.defiro.engine.internal.ProcedureSeed;
 import io.restassured.response.Response;
@@ -128,6 +129,18 @@ public class DocumentoSteps {
     public void pedeODocumento(String person, String reference) {
         response = reviews.browserOf(person).request().get(PROCEDURES + reference + "/document");
         access.answered(response);
+    }
+
+    // No sign-in: a Browser that never signed in, as UC01 asks for the profile.
+    @Quando("alguém sem sessão iniciada pede o documento de {string}")
+    public void alguemSemSessaoPedeODocumento(String reference) {
+        response = new Browser().request().get(PROCEDURES + reference + "/document");
+        access.answered(response);
+    }
+
+    @Então("é-lhe pedido que inicie sessão")
+    public void eLhePedidoQueInicieSessao() {
+        assertThat(response.statusCode()).as("sign-in is asked for").isEqualTo(401);
     }
 
     @Então("recebe {string} como {string}")
