@@ -16,6 +16,8 @@ type FlashProps = {
   onClose: () => void
   /** Reverses what the notice is about; with it, the notice stays until it is closed (UC17 #6) */
   onUndo?: () => void
+  /** Opens the document the notice is about; like `onUndo`, it keeps the notice until it is closed (UC23) */
+  onDoc?: () => void
 }
 
 /**
@@ -23,7 +25,7 @@ type FlashProps = {
  * details are read out to screen readers. Without buttons it fades away by
  * itself after a few seconds.
  */
-export function Flash({ notice, onClose, onUndo }: FlashProps) {
+export function Flash({ notice, onClose, onUndo, onDoc }: FlashProps) {
   // The live region exists before the text arrives, so screen readers announce it
   const [ready, setReady] = useState(false)
   useEffect(() => {
@@ -39,7 +41,7 @@ export function Flash({ notice, onClose, onUndo }: FlashProps) {
         <div
           className={cx(
             'fixed inset-x-0 top-4 z-[120] mx-auto box-border flex w-max max-w-screen-gutter flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line-strong bg-panel py-2 pr-2 pl-3 text-ink shadow-toast',
-            onUndo ? 'animate-toast' : 'animate-notice',
+            onUndo || onDoc ? 'animate-toast' : 'animate-notice',
           )}
         >
           <span aria-hidden="true" className={cx('grid size-7 shrink-0 place-items-center rounded-full text-bg', toneColor[tom])}>
@@ -53,6 +55,11 @@ export function Flash({ notice, onClose, onUndo }: FlashProps) {
           {onUndo && (
             <Button variant="secondary" size="s" icon="reset" className="min-h-9 px-3" onClick={onUndo}>
               Desfazer
+            </Button>
+          )}
+          {onDoc && (
+            <Button variant="secondary" size="s" icon="fileText" className="min-h-9 px-3" onClick={onDoc}>
+              Ver documento
             </Button>
           )}
           <IconButton icon="x" iconSize={16} label="Fechar o aviso" onClick={onClose} className="size-9 border-transparent" />

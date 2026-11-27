@@ -100,6 +100,12 @@ public class DocumentoSteps {
                         .toOffsetDateTime());
     }
 
+    // UC22's stand-in for a browser scenario: the document made when the procedure closed
+    void storeFixtureFor(String reference) {
+        String filename = "ordem_reembolso_" + reference + ".pdf";
+        seed.generated(reference, filename, PDF, fixture("ordem_reembolso_AC-2026-0098.pdf"));
+    }
+
     @E("ao fechar foi gerada a ordem de reembolso {string}")
     public void aoFecharFoiGerada(String filename) {
         generated = fixture(filename);

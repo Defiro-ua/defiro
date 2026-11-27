@@ -38,4 +38,14 @@ describe('Flash', () => {
 
     expect(close).toHaveBeenCalledOnce()
   })
+
+  it('Flash.verDocumento: offers «Ver documento» and stays until it is closed', async () => {
+    const doc = vi.fn()
+    render(<Flash notice={{ titulo: 'Procedimento fechado' }} onClose={() => {}} onDoc={doc} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver documento' }))
+
+    expect(doc).toHaveBeenCalledOnce()
+    expect(screen.getByText('Procedimento fechado').parentElement).not.toHaveClass('animate-notice')
+  })
 })

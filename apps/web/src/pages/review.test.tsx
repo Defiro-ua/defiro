@@ -434,6 +434,19 @@ describe('«Rever pedido» (UC17)', () => {
     expect(screen.getByRole('button', { name: 'Desfazer' })).toBeInTheDocument()
   })
 
+  it('lastApprovalShowsClosedNotice: approving the last step opens the inbox with the closing notice and «Ver documento»', async () => {
+    vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
+    vi.mocked(api.approve).mockResolvedValue({ done: true, result: { ...approved, nextStep: null, handledBy: null, nextTask: null } })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    openAt('/pedidos/AC-2026-0147')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Aprovar' }))
+
+    expect(await screen.findByText('Procedimento fechado')).toBeInTheDocument()
+    expect(screen.getByText(/AC-2026-0147: foi gerado o documento final\. Ana Ferreira \(Técnica Superior\) já o pode transferir\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver documento' })).toBeInTheDocument()
+  })
+
   it('when someone approved first, goes back to the inbox saying who, with no «Desfazer»', async () => {
     vi.mocked(api.openRequest).mockResolvedValue({ found: true, request })
     vi.mocked(api.approve).mockResolvedValue({ done: false, reason: 'Este pedido já foi tratado por Segunda Chefia, Chefe de Divisão.' })

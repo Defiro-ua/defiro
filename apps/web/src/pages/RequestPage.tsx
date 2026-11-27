@@ -25,6 +25,7 @@ import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
 import {
   approvedNotice,
+  closedNotice,
   approveFailed,
   dateTime,
   refusedNotice,
@@ -138,12 +139,18 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
   }
 
   // Decides, and goes to the inbox with the notice and «Desfazer». If someone acted first, with who.
-  async function decide<T>(task: string, deciding: Promise<Outcome<T>>, notice: (result: T) => Notice, failed: Notice) {
+  async function decide<T>(
+    task: string,
+    deciding: Promise<Outcome<T>>,
+    notice: (result: T) => Notice,
+    failed: Notice,
+    document?: (result: T) => string | undefined,
+  ) {
     setBusy(true)
     try {
       const outcome = await deciding
       const state: ReviewState = outcome.done
-        ? { notice: notice(outcome.result), undo: { task, reference: r.reference } }
+        ? { notice: notice(outcome.result), undo: { task, reference: r.reference }, document: document?.(outcome.result) }
         : { notice: refusedNotice(outcome.reason) }
       navigate(paths.inbox, { state })
     } catch {
@@ -152,7 +159,18 @@ function Review({ request: r, onRefused }: { request: ReviewRequest; onRefused: 
     }
   }
 
-  const approveIt = (task: string) => decide(task, approve(task), (to) => approvedNotice(r.reference, to.nextStep, to.handledBy), approveFailed)
+  // Approving the last step closes the procedure: «Ver documento» opens its document from the inbox
+  const approveIt = (task: string) =>
+    decide(
+      task,
+      approve(task),
+      (to) =>
+        to.nextStep === null
+          ? closedNotice(r.reference, r.requester.jobTitle ? `${r.requester.name} (${r.requester.jobTitle})` : r.requester.name)
+          : approvedNotice(r.reference, to.nextStep, to.handledBy),
+      approveFailed,
+      (to) => (to.nextStep === null ? r.reference : undefined),
+    )
 
   function endIt(task: string, kind: EndKind, why: Why) {
     const requester = [r.requester.name, r.requester.jobTitle].filter(Boolean).join(', ')

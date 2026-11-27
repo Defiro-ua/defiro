@@ -27,6 +27,8 @@ export function InboxPage() {
   const arrived = useArrival()
   const [notice, setNotice] = useState<Notice | null>(arrived.notice ?? null)
   const [undo, setUndo] = useState(arrived.undo)
+  // The document «Ver documento» in the notice opens, after closing a procedure
+  const [noticeDocument, setNoticeDocument] = useState(arrived.document)
   const undoing = useRef(false)
   const [items, setItems] = useState<InboxItem[] | null | 'failed'>(null)
   // The request whose document is open on screen
@@ -85,8 +87,10 @@ export function InboxPage() {
         onClose={() => {
           setNotice(null)
           setUndo(undefined)
+          setNoticeDocument(undefined)
         }}
         onUndo={undo ? undoIt : undefined}
+        onDoc={noticeDocument ? () => setDocumentOf(noticeDocument) : undefined}
       />
       <h1 ref={headingRef} tabIndex={-1} className="m-0 text-headline-lg outline-none">
         Caixa de tarefas
@@ -162,7 +166,14 @@ export function InboxPage() {
         </section>
       )}
       <MyRequests onDocument={setDocumentOf} />
-      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={(filename) => setNotice(savedNotice(filename))} />
+      <DocumentDialog
+        reference={documentOf}
+        onClose={() => setDocumentOf(null)}
+        onSaved={(filename) => {
+          setNoticeDocument(undefined)
+          setNotice(savedNotice(filename))
+        }}
+      />
     </AppShell>
   )
 }

@@ -2,15 +2,23 @@ import type { Notice } from '../components/Flash'
 
 /**
  * What a page passes to the next one in the router's state: the notice to show there and, after a
- * decision, the task whose decision «Desfazer» reverses.
+ * decision, the task whose decision «Desfazer» reverses and, after closing the procedure, the reference whose
+ * document «Ver documento» opens.
  */
-export type ReviewState = { notice?: Notice; undo?: { task: string; reference: string } }
+export type ReviewState = { notice?: Notice; undo?: { task: string; reference: string }; document?: string }
 
-/** The prototype's text, read out to screen readers; closing the procedure is UC22's */
+/** The prototype's text, read out to screen readers; closing the procedure is `closedNotice` */
 export const approvedNotice = (reference: string, nextStep: string | null, handledBy: string | null): Notice => ({
   tom: 'ok',
   titulo: 'Pedido aprovado',
   texto: nextStep ? `${reference} seguiu para o passo «${nextStep}», com ${handledBy}.` : undefined,
+})
+
+/** After the last step: the document is made, and `requester` is «Nome (Cargo)» */
+export const closedNotice = (reference: string, requester: string): Notice => ({
+  tom: 'ok',
+  titulo: 'Procedimento fechado',
+  texto: `${reference}: foi gerado o documento final. ${requester} já o pode transferir.`,
 })
 
 const reasonsText = (reasons: string[]) => `${reasons.length === 1 ? 'Motivo' : 'Motivos'}: ${reasons.join('; ')}.`

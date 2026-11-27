@@ -47,7 +47,7 @@ Funcionalidade: Transferir um documento gerado
       Quando Ana Ferreira pede o documento de "AC-2026-0147"
       Então não há documento
 
-    @browser @wip
+    @browser
     Cenário: Quem valida abre o documento a partir do aviso de fecho
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Validação final»
       Quando Joana Pires o valida e fecha

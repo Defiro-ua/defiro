@@ -20,6 +20,7 @@ import io.github.defiro.acceptance.WebBrowser;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -38,6 +39,12 @@ public class DocumentoScreenSteps {
     private Download download;
     // Who the scenario is about, for the steps that say «ela»
     private String person;
+
+    @Autowired
+    DocumentoSteps documents;
+
+    @Autowired
+    RequestSteps requests;
 
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
@@ -200,6 +207,47 @@ public class DocumentoScreenSteps {
                         + " return !!top && el.contains(top); }"))
                 .as("«PDF guardado» is the topmost element where it is shown")
                 .isEqualTo(true);
+    }
+
+    // As UC17's «approves the request from his inbox»: «Rever», then «Aprovar», back on the inbox
+    @Quando("{person} o valida e fecha")
+    public void validaEFecha(String person) {
+        String reference = requests.reference();
+        browser.signIn(person);
+        page.getByRole(
+                        AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName(Pattern.compile("^Rever\\s*o pedido " + reference + " ")))
+                .click();
+        page.getByRole(
+                        AriaRole.BUTTON,
+                        new Page.GetByRoleOptions().setName("Aprovar").setExact(true))
+                .click();
+        page.waitForURL("**/caixa-de-tarefas");
+        // Until UC22 makes the document when the procedure closes
+        documents.storeFixtureFor(reference);
+        this.reference = reference;
+    }
+
+    @Então("vê {string} com «Ver documento»")
+    public void veComVerDocumento(String title) {
+        // The title has no characters special to a regular expression, which Playwright runs in the browser
+        assertThat(page.getByRole(AriaRole.STATUS).getByText(Pattern.compile("^" + title)))
+                .isVisible();
+        assertThat(verDocumento()).isVisible();
+    }
+
+    @E("«Ver documento» abre o documento de {string}")
+    public void verDocumentoAbre(String reference) {
+        document = page.waitForResponse(
+                response -> response.url().endsWith("/procedures/" + reference + "/document"),
+                () -> verDocumento().click());
+        Assertions.assertThat(document.status()).isEqualTo(200);
+        assertThat(dialog().locator("iframe[title='ordem_reembolso_" + reference + ".pdf']"))
+                .isVisible();
+    }
+
+    private Locator verDocumento() {
+        return page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Ver documento"));
     }
 
     private Locator dialog() {
