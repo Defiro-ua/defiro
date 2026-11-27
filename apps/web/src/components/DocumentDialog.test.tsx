@@ -73,7 +73,7 @@ describe('DocumentDialog', () => {
 
     rerender(<DocumentDialog reference={null} onClose={vi.fn()} onSaved={vi.fn()} />)
 
-    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/0098'))
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/0098'), { timeout: 3000 })
   })
 
   it('fecharReturnsFocus', async () => {
@@ -99,6 +99,39 @@ describe('DocumentDialog', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => expect(documento).toHaveFocus())
+  })
+
+  it('fecharFocusesTheHeadingWhenTheOpenerIsGone', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    // As the closing notice opens it: «Ver documento» is gone once the dialog is open
+    function Opener() {
+      const [reference, setReference] = useState<string | null>(null)
+      const [notice, setNotice] = useState(true)
+      return (
+        <main>
+          <h1 tabIndex={-1}>Caixa de tarefas</h1>
+          {notice && (
+            <button
+              type="button"
+              onClick={() => {
+                setReference('AC-2026-0098')
+                setNotice(false)
+              }}
+            >
+              Ver documento
+            </button>
+          )}
+          <DocumentDialog reference={reference} onClose={() => setReference(null)} onSaved={vi.fn()} />
+        </main>
+      )
+    }
+    render(<Opener />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ver documento' }))
+    await screen.findByTitle(filename)
+    await userEvent.click(screen.getByRole('button', { name: /^Fechar/ }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus())
   })
 
   describe('«Transferir PDF»', () => {
@@ -156,6 +189,22 @@ describe('DocumentDialog', () => {
       expect(clicked).toHaveLength(1)
       expect(clicked[0].getAttribute('download')).toBe(filename)
       expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('noViewerRevokesTheBlobUrlOnlyAfterTheDownloadHasStarted', async () => {
+      Object.defineProperty(navigator, 'pdfViewerEnabled', { value: false, configurable: true })
+      vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+      const onSaved = vi.fn()
+      function Host() {
+        const [reference, setReference] = useState<string | null>('AC-2026-0098')
+        return <DocumentDialog reference={reference} onClose={() => setReference(null)} onSaved={onSaved} />
+      }
+      render(<Host />)
+      await waitFor(() => expect(onSaved).toHaveBeenCalled())
+      expect(clicked).toHaveLength(1)
+
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/0098'), { timeout: 3000 })
     })
   })
 })

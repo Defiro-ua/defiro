@@ -56,7 +56,8 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
     )
     return () => {
       current = false
-      if (url) URL.revokeObjectURL(url)
+      // A download that has just started may still be reading the URL, so it is let go a little later
+      if (url) window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setPdf(null)
       setTold(null)
     }
@@ -83,7 +84,10 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
     if (reference) onClose()
     const el = returnTo.current as HTMLElement | null
     returnTo.current = null
-    if (el?.focus && document.contains(el)) window.setTimeout(() => el.focus(), 0)
+    // The opener may be gone by now (the closing notice goes when the page shows another), and then
+    // focus goes to the page's heading rather than to nowhere
+    const target = el && el !== document.body && document.contains(el) ? el : document.querySelector<HTMLElement>('main h1')
+    if (target?.focus) window.setTimeout(() => target.focus(), 0)
   }
 
   return (
