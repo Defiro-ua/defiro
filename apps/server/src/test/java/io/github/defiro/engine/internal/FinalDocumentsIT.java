@@ -64,13 +64,18 @@ class FinalDocumentsIT {
     final Person joana = new Person("joana", "Joana Pires", "Técnica de Recursos Humanos", UNIT, List.of());
 
     byte[] pdf;
+    UUID draft;
+    int version;
+    StepSpecification request;
+    StepSpecification last;
+    Decisions.Approved closing;
 
     @BeforeEach
     void joanaClosedAnasRequest() throws IOException {
-        StepSpecification request = step("Pedido", "submission");
-        StepSpecification last = step("Validação final", "final-validation");
-        UUID draft = UUID.randomUUID();
-        int version = deployment.deploy(
+        request = step("Pedido", "submission");
+        last = step("Validação final", "final-validation");
+        draft = UUID.randomUUID();
+        version = deployment.deploy(
                 new WorkflowSpecification(
                         WorkflowSpecification.SCHEMA_VERSION,
                         "Ajudas de custo",
@@ -79,16 +84,9 @@ class FinalDocumentsIT {
                                 new Transition(request.id(), "submitted", last.id()),
                                 new Transition(last.id(), Decisions.APPROVED, null))),
                 new Publication("sofia", draft, 1));
-        ProcedureSeed.Submitted submitted = seed.submit(
-                REFERENCE,
-                draft,
-                version,
-                request.id(),
-                last,
-                new RequestData.Requester(ana.id(), ana.name(), ana.jobTitle(), ana.unit(), "Rui Matos"),
-                List.of());
+        ProcedureSeed.Submitted submitted = submit(REFERENCE);
         decisions.take(submitted.task(), joana);
-        decisions.approve(submitted.task(), joana);
+        closing = decisions.approve(submitted.task(), joana).orElseThrow();
         seed.closedAt(REFERENCE, OffsetDateTime.parse("2026-10-17T15:30:00+01:00"));
         pdf = fixture();
         seed.generated(REFERENCE, FILENAME, "application/pdf", pdf);
@@ -117,6 +115,34 @@ class FinalDocumentsIT {
                 ContentDisposition.parse(result.getResponse().getHeader(HttpHeaders.CONTENT_DISPOSITION));
         assertThat(disposition.isInline()).isTrue();
         assertThat(disposition.getFilename()).isEqualTo(FILENAME);
+    }
+
+    // Not closed yet: waiting at the last step, with a stored document all the same.
+    @Test
+    void notClosedHasNoDocument() {
+        String open = "AC-2026-0147";
+        submit(open);
+        seed.generated(open, "ordem_reembolso_AC-2026-0147.pdf", "application/pdf", pdf);
+
+        assertThat(finalDocuments.open(open, ana)).isEmpty();
+    }
+
+    @Test
+    void undoneClosingHasNoDocument() {
+        decisions.undo(closing.task(), joana).orElseThrow();
+
+        assertThat(finalDocuments.open(REFERENCE, ana)).isEmpty();
+    }
+
+    private ProcedureSeed.Submitted submit(String reference) {
+        return seed.submit(
+                reference,
+                draft,
+                version,
+                request.id(),
+                last,
+                new RequestData.Requester(ana.id(), ana.name(), ana.jobTitle(), ana.unit(), "Rui Matos"),
+                List.of());
     }
 
     private static byte[] fixture() throws IOException {

@@ -42,7 +42,6 @@ Funcionalidade: Transferir um documento gerado
       Quando Ana Ferreira abre «Os meus pedidos»
       Então o pedido "AC-2026-0147" não oferece «Documento»
 
-    @wip
     Cenário: Um procedimento que não está fechado não tem documento
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Verificação financeira»
       Quando Ana Ferreira pede o documento de "AC-2026-0147"

@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 @Component
 class FinalDocuments {
 
+    private static final String CLOSED = "closed";
+
     private final Procedures procedures;
     private final GeneratedDocuments generatedDocuments;
 
@@ -22,10 +24,11 @@ class FinalDocuments {
     /** The document, and its bytes as they were generated. */
     record Opened(GeneratedDocuments.Document document, byte[] content) {}
 
-    /** The final document of the procedure, for its requester, once it has one. */
+    /** The final document of the procedure, for its requester, once the procedure is closed and has one. */
     Optional<Opened> open(String reference, Person person) {
         return procedures
                 .find(reference)
+                .filter(procedure -> CLOSED.equals(procedure.status()))
                 .filter(procedure -> procedure.requester().equals(person.id()))
                 .flatMap(procedure -> generatedDocuments.of(procedure.id()))
                 .map(document -> new Opened(document, generatedDocuments.content(document)));

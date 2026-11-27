@@ -46,6 +46,10 @@ public class DocumentoSteps {
     // The request form is UC13's; these steps only need a request, so it has one answer.
     private static final List<Map<String, String>> ANSWERS = List.of(Map.of("field", "Motivo", "answer", "Formação"));
 
+    // Who handles the steps of «Ajudas de custo» before the last one, as the Background has them.
+    private static final Map<String, String> APPROVERS =
+            Map.of("Validação da chefia", "Rui Matos", "Verificação financeira", "Carla Dias");
+
     private String workflow;
     private byte[] generated;
     private Response response;
@@ -101,6 +105,25 @@ public class DocumentoSteps {
         seed.generated(requests.reference(), filename, PDF, generated);
     }
 
+    // Another request of the same workflow, waiting at that step: whoever handles each step before it
+    // approved it. It has no document, as it isn't closed.
+    @Dado("que o pedido {string} de {person} está em «{}»")
+    public void oPedidoEstaEm(String reference, String requester, String step) {
+        List<String> path = requests.path(workflow);
+        assertThat(path).as("the path").contains(step);
+        requests.submitted(requester, reference, workflow, ANSWERS);
+        reviews.followsANewRequest();
+        for (int k = 1; k < path.indexOf(step); k++) {
+            String approver = APPROVERS.get(path.get(k));
+            assertThat(approver).as("who approves " + path.get(k)).isNotNull();
+            if (k == 1) {
+                reviews.approvedTheRequest(approver, reference);
+            } else {
+                reviews.approvedItAt(approver, path.get(k));
+            }
+        }
+    }
+
     @Quando("{person} pede o documento de {string}")
     public void pedeODocumento(String person, String reference) {
         response = reviews.browserOf(person).request().get(PROCEDURES + reference + "/document");
@@ -114,6 +137,11 @@ public class DocumentoSteps {
         assertThat(ContentDisposition.parse(response.header(HttpHeaders.CONTENT_DISPOSITION))
                         .getFilename())
                 .isEqualTo(filename);
+    }
+
+    @Então("não há documento")
+    public void naoHaDocumento() {
+        assertThat(response.statusCode()).as("there is no document").isEqualTo(404);
     }
 
     @E("é a ordem de reembolso gerada quando o procedimento foi fechado")

@@ -312,6 +312,11 @@ public class ReviewSteps {
         }
     }
 
+    /** A new request is the one these steps follow: the tasks of the earlier one are not its tasks. */
+    void followsANewRequest() {
+        tasks.clear();
+    }
+
     /** The person's browser, signed in. */
     io.github.defiro.acceptance.Browser browserOf(String person) {
         return people.of(person);
