@@ -466,6 +466,36 @@ describe('«Rever pedido» (UC17)', () => {
 
   const closing = { notice: { titulo: 'Procedimento fechado' }, undo: { task: 't1', reference: 'AC-2026-0147' }, document: 'AC-2026-0147' }
 
+  it('«PDF guardado» never carries «Desfazer»: saving the closing PDF leaves no undo of the approval', async () => {
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.fetchDocument).mockResolvedValue({ blob: new Blob(['%PDF-1.4'], { type: 'application/pdf' }), filename: 'ordem_reembolso_AC-2026-0147.pdf' })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    openAt('/caixa-de-tarefas', closing)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver documento' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Transferir PDF/ }))
+
+    expect(screen.getAllByText('PDF guardado').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Desfazer' })).not.toBeInTheDocument()
+  })
+
+  it('with no PDF viewer, «Ver documento» downloads at once and leaves no «Desfazer»', async () => {
+    Object.defineProperty(navigator, 'pdfViewerEnabled', { value: false, configurable: true })
+    vi.mocked(api.listInbox).mockResolvedValue([])
+    vi.mocked(api.fetchDocument).mockResolvedValue({ blob: new Blob(['%PDF-1.4'], { type: 'application/pdf' }), filename: 'ordem_reembolso_AC-2026-0147.pdf' })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      openAt('/caixa-de-tarefas', closing)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Ver documento' }))
+
+      expect(await screen.findByText('PDF guardado')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Desfazer' })).not.toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'pdfViewerEnabled', { value: true, configurable: true })
+    }
+  })
+
   it('a refused undo of the closing replaces the notice, and «Ver documento» goes with it', async () => {
     vi.mocked(api.listInbox).mockResolvedValue([])
     vi.mocked(api.undoDecision).mockResolvedValue({ done: false, reason: 'Já não é possível desfazer.' })

@@ -170,7 +170,11 @@ export function InboxPage() {
         </section>
       )}
       <MyRequests onDocument={setDocumentOf} />
-      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={(filename) => setNotice(savedNotice(filename))} />
+      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={(filename) => {
+          // «PDF guardado» says nothing about an approval, so it offers no «Desfazer» for one
+          setNotice(savedNotice(filename))
+          setUndo(undefined)
+        }} />
     </AppShell>
   )
 }
