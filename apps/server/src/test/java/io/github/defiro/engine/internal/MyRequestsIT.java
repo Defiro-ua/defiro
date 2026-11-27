@@ -58,7 +58,8 @@ class MyRequestsIT {
     @Autowired
     MockMvc mvc;
 
-    final Person ana = new Person("ana", "Ana Ferreira", "Técnica Superior", HEADS_UNIT, List.of());
+    final Person ana =
+            new Person("ana-" + UUID.randomUUID(), "Ana Ferreira", "Técnica Superior", HEADS_UNIT, List.of());
     final Person rui = new Person("rui", "Rui Matos", "Chefe de Divisão", HEADS_UNIT, List.of());
     final Person carla = new Person("carla", "Carla Dias", "Técnica da Divisão Financeira", FINANCE_UNIT, List.of());
     final Person joana = new Person("joana", "Joana Pires", "Técnica de Recursos Humanos", UNIT, List.of());
@@ -99,7 +100,14 @@ class MyRequestsIT {
         assertThat(procedures.of(ana.id()))
                 .extracting(Procedures.Mine::reference)
                 .containsExactlyInAnyOrder(CLOSED, OPEN);
-        assertThat(procedures.of(rui.id())).isEmpty();
+        assertThat(procedures.of("nobody-" + UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void newestFirst() {
+        assertThat(procedures.of(ana.id()))
+                .extracting(Procedures.Mine::reference)
+                .containsExactly(OPEN, CLOSED);
     }
 
     @Test
@@ -135,7 +143,9 @@ class MyRequestsIT {
                 .andExpect(jsonPath("$[?(@.reference == '" + CLOSED + "')].hasDocument")
                         .value(true));
         mvc.perform(get("/api/engine/my-requests")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(TRUSTED_KEY, claims -> claims.subject(rui.id()))))
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                bearer(TRUSTED_KEY, claims -> claims.subject("nobody-" + UUID.randomUUID()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
