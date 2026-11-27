@@ -121,12 +121,10 @@ Funcionalidade: Transferir um documento gerado
   Regra: Só os participantes do procedimento abrem o seu documento
     # Participantes, no MVP: o requerente e quem fechou o procedimento.
 
-    @wip
     Cenário: Quem fechou o procedimento recebe o documento
       Quando Joana Pires pede o documento de "AC-2026-0098"
       Então recebe "ordem_reembolso_AC-2026-0098.pdf"
 
-    @wip
     Esquema do Cenário: Mais ninguém recebe o documento, mesmo com o endereço
       Quando <pessoa> pede o documento de "AC-2026-0098"
       Então é recusado

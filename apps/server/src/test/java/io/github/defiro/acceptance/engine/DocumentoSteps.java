@@ -139,6 +139,19 @@ public class DocumentoSteps {
                 .isEqualTo(filename);
     }
 
+    @Então("recebe {string}")
+    public void recebe(String filename) {
+        assertThat(response.statusCode()).as("the document is sent").isEqualTo(200);
+        assertThat(ContentDisposition.parse(response.header(HttpHeaders.CONTENT_DISPOSITION))
+                        .getFilename())
+                .isEqualTo(filename);
+    }
+
+    @Então("é recusado")
+    public void eRecusado() {
+        access.isNotAllowedTo();
+    }
+
     @Então("não há documento")
     public void naoHaDocumento() {
         assertThat(response.statusCode()).as("there is no document").isEqualTo(404);
