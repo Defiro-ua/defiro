@@ -8,8 +8,10 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.AriaRole;
 import com.microsoft.playwright.options.BoundingBox;
+import com.microsoft.playwright.options.ViewportSize;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
+import io.cucumber.java.pt.Dado;
 import io.cucumber.java.pt.E;
 import io.cucumber.java.pt.Então;
 import io.cucumber.java.pt.Quando;
@@ -31,6 +33,8 @@ public class DocumentoScreenSteps {
     private String reference;
     // The server's answer to the dialog's request for the document
     private Response document;
+    // Who the scenario is about, for the steps that say «ela»
+    private String person;
 
     // The port of the server under test, which also serves the web app
     @Value("${local.server.port}")
@@ -96,6 +100,33 @@ public class DocumentoScreenSteps {
         for (Locator button : List.of(fechar(), transferir())) {
             assertThat(button).isVisible();
             Assertions.assertThat(button.boundingBox().y).isLessThan(pdf.y);
+        }
+    }
+
+    @Dado("que o ecrã de {person} tem {int} píxeis de largura")
+    public void oEcraTem(String person, int width) {
+        this.person = person;
+        page.setViewportSize(width, 800);
+    }
+
+    @Quando("ela abre o documento de {string} e desce até ao fim")
+    public void abreEDesce(String reference) {
+        abreODocumento(person, reference);
+        assertThat(dialog().locator("iframe")).isVisible();
+        // The dialog's box is what scrolls; the bar is sticky at its top
+        dialog().locator("> div").evaluate("box => box.scrollTo(0, box.scrollHeight)");
+    }
+
+    @Então("continua a ver «Fechar» e «Transferir PDF»")
+    public void continuaAVer() {
+        ViewportSize viewport = page.viewportSize();
+        for (Locator button : List.of(fechar(), transferir())) {
+            assertThat(button).isVisible();
+            BoundingBox box = button.boundingBox();
+            Assertions.assertThat(box.x).isGreaterThanOrEqualTo(0);
+            Assertions.assertThat(box.y).isGreaterThanOrEqualTo(0);
+            Assertions.assertThat(box.x + box.width).isLessThanOrEqualTo(viewport.width);
+            Assertions.assertThat(box.y + box.height).isLessThanOrEqualTo(viewport.height);
         }
     }
 

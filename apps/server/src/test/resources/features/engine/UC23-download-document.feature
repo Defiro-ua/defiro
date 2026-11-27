@@ -64,7 +64,7 @@ Funcionalidade: Transferir um documento gerado
       Então vê no ecrã o PDF "ordem_reembolso_AC-2026-0098.pdf"
       E vê «Fechar» e «Transferir PDF» no topo
 
-    @browser @wip
+    @browser
     Esquema do Cenário: «Fechar» e «Transferir PDF» ficam visíveis em qualquer tamanho de ecrã
       Dado que o ecrã de Ana Ferreira tem <largura> píxeis de largura
       Quando ela abre o documento de "AC-2026-0098" e desce até ao fim
