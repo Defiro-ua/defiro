@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchDocument } from '../api/engine'
-import { documentFailed } from '../review/notices'
+import { documentFailed, savedNotice } from '../review/notices'
 import { Button } from './Button'
+import type { Notice } from './Flash'
 import { Icon } from './Icon'
 
 type Props = {
@@ -32,6 +33,12 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
   // A device with no PDF viewer cannot show the document, so it downloads it at once and shows no dialog
   const noViewer = navigator.pdfViewerEnabled === false
   const saved = useRef<string | null>(null)
+  // What the person was told in the dialog itself, which covers the page behind it
+  const [told, setTold] = useState<Notice | null>(null)
+  const callbacks = useRef({ onSaved, onClose })
+  useEffect(() => {
+    callbacks.current = { onSaved, onClose }
+  })
   const shown = !!reference && (!noViewer || pdf === 'failed')
 
   // Fetched once for each opening; its blob URL lives until the dialog closes
@@ -51,6 +58,7 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
       current = false
       if (url) URL.revokeObjectURL(url)
       setPdf(null)
+      setTold(null)
     }
   }, [reference])
 
@@ -58,9 +66,9 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
     if (!noViewer || !pdf || pdf === 'failed' || saved.current === pdf.url) return
     saved.current = pdf.url
     save(pdf)
-    onSaved(pdf.filename)
-    onClose()
-  }, [noViewer, pdf, onSaved, onClose])
+    callbacks.current.onSaved(pdf.filename)
+    callbacks.current.onClose()
+  }, [noViewer, pdf])
 
   useEffect(() => {
     const d = ref.current
@@ -93,11 +101,19 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
               onClick={() => {
                 if (!pdf || pdf === 'failed') return
                 save(pdf)
+                setTold(savedNotice(pdf.filename))
                 onSaved(pdf.filename)
               }}
             >
               Transferir PDF
             </Button>
+            <p role="status" className="m-0 basis-full text-body-sm text-ink empty:hidden">
+              {told && (
+                <>
+                  <span className="font-semibold text-success">{told.titulo}</span> {told.texto}
+                </>
+              )}
+            </p>
           </div>
           <div className="flex items-start gap-4">
             <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-md bg-soft text-accent-ink">

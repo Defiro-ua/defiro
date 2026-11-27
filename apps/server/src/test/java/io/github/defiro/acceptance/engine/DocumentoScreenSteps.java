@@ -190,8 +190,16 @@ public class DocumentoScreenSteps {
 
     @E("é-lhe dito que foi guardado")
     public void foiGuardado() {
-        // The notice's title; its longer text is for screen readers and follows in the same line
-        assertThat(page.getByRole(AriaRole.STATUS).getByText("PDF guardado")).isVisible();
+        // Where the person is looking: inside the dialog while it is open, on the page when it is not
+        Locator where = dialog().count() > 0 ? dialog() : page.locator("body");
+        Locator notice = where.getByRole(AriaRole.STATUS).getByText("PDF guardado");
+        assertThat(notice).isVisible();
+        // ... and nothing covers it, such as the backdrop of a modal dialog over the page
+        Assertions.assertThat(notice.evaluate("el => { const r = el.getBoundingClientRect();"
+                        + " const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);"
+                        + " return !!top && el.contains(top); }"))
+                .as("«PDF guardado» is the topmost element where it is shown")
+                .isEqualTo(true);
     }
 
     private Locator dialog() {

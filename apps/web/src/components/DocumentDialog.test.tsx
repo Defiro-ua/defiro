@@ -129,6 +129,18 @@ describe('DocumentDialog', () => {
       expect(api.fetchDocument).toHaveBeenCalledTimes(1)
     })
 
+    it('transferirSaysSoInTheDialog', async () => {
+      vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+      render(<DocumentDialog reference="AC-2026-0098" onClose={vi.fn()} onSaved={vi.fn()} />)
+      await screen.findByTitle(filename)
+
+      await userEvent.click(screen.getByRole('button', { name: /^Transferir PDF/ }))
+
+      const status = within(screen.getByRole('dialog')).getByRole('status')
+      expect(status).toHaveTextContent('PDF guardado')
+      expect(status).toHaveTextContent(`${filename} foi guardado.`)
+    })
+
     it('noViewerDownloadsAtOnce', async () => {
       Object.defineProperty(navigator, 'pdfViewerEnabled', { value: false, configurable: true })
       const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal')
