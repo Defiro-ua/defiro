@@ -2,7 +2,7 @@
 # Exemplos: critérios de aceitação de UC23, diagrama de sequência («5 · Download») e protótipo web
 # (pedido AC-2026-0098, já fechado, e DocumentDialog). Desenho: docs/uc23-download-document-design.md.
 # @wip até a UC22 guardar o documento e os passos existirem.
-@UC23 @wip
+@UC23
 Funcionalidade: Transferir um documento gerado
   Como participante de um workflow,
   quero ver e transferir em PDF o documento final de um pedido fechado,
@@ -30,24 +30,25 @@ Funcionalidade: Transferir um documento gerado
 
   Regra: Com o procedimento fechado, o requerente abre o documento final em «Os meus pedidos»
 
-    @browser
+    @browser @wip
     Cenário: Um pedido fechado oferece o seu documento em «Os meus pedidos»
       Quando Ana Ferreira abre «Os meus pedidos»
       Então o pedido "AC-2026-0098" mostra "Fechado a 17/10/2026"
       E oferece «Documento»
 
-    @browser
+    @browser @wip
     Cenário: Um pedido que não está fechado não oferece documento
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Verificação financeira»
       Quando Ana Ferreira abre «Os meus pedidos»
       Então o pedido "AC-2026-0147" não oferece «Documento»
 
+    @wip
     Cenário: Um procedimento que não está fechado não tem documento
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Verificação financeira»
       Quando Ana Ferreira pede o documento de "AC-2026-0147"
       Então não há documento
 
-    @browser
+    @browser @wip
     Cenário: Quem valida abre o documento a partir do aviso de fecho
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Validação final»
       Quando Joana Pires o valida e fecha
@@ -58,13 +59,13 @@ Funcionalidade: Transferir um documento gerado
     # O ecrã mostra o próprio PDF, tal como foi guardado ao fechar. Se o dispositivo não consegue
     #   mostrar um PDF no ecrã, não há pré-visualização e o PDF é logo transferido.
 
-    @browser
+    @browser @wip
     Cenário: O documento abre no ecrã
       Quando Ana Ferreira abre o documento de "AC-2026-0098" em «Os meus pedidos»
       Então vê no ecrã o PDF "ordem_reembolso_AC-2026-0098.pdf"
       E vê «Fechar» e «Transferir PDF» no topo
 
-    @browser
+    @browser @wip
     Esquema do Cenário: «Fechar» e «Transferir PDF» ficam visíveis em qualquer tamanho de ecrã
       Dado que o ecrã de Ana Ferreira tem <largura> píxeis de largura
       Quando ela abre o documento de "AC-2026-0098" e desce até ao fim
@@ -76,13 +77,13 @@ Funcionalidade: Transferir um documento gerado
         | 768     |
         | 1440    |
 
-    @browser
+    @browser @wip
     Cenário: «Fechar» fecha o documento e volta ao sítio de onde foi aberto
       Dado que Ana Ferreira abriu o documento de "AC-2026-0098" em «Os meus pedidos»
       Quando escolhe «Fechar»
       Então volta a «Os meus pedidos», em «Documento» de "AC-2026-0098"
 
-    @browser
+    @browser @wip
     Cenário: Um dispositivo que não mostra o PDF transfere-o
       Dado que o navegador de Ana Ferreira não consegue mostrar um PDF no ecrã
       Quando ela abre o documento de "AC-2026-0098" em «Os meus pedidos»
@@ -96,7 +97,7 @@ Funcionalidade: Transferir um documento gerado
       Então recebe "ordem_reembolso_AC-2026-0098.pdf" como "application/pdf"
       E é a ordem de reembolso gerada quando o procedimento foi fechado
 
-    @browser
+    @browser @wip
     Cenário: «Transferir PDF» guarda o PDF e di-lo
       Dado que Ana Ferreira abriu o documento de "AC-2026-0098"
       Quando escolhe «Transferir PDF»
@@ -106,11 +107,13 @@ Funcionalidade: Transferir um documento gerado
   Regra: O documento mostra cada pessoa com o nome e o cargo
     # Tal como eram quando o procedimento foi fechado: o PDF é gerado uma vez e nunca mais.
 
+    @wip
     Cenário: Cada pessoa no documento tem o nome e o cargo
       Quando Ana Ferreira recebe o documento de "AC-2026-0098"
       Então mostra "Requerente" como "Ana Ferreira (Técnica Superior)"
       E mostra "Validado por" como "Joana Pires (Técnica de Recursos Humanos) a 17/10/2026"
 
+    @wip
     Cenário: Uma mudança de cargo mais tarde não muda o documento
       Dado que o cargo de Ana Ferreira passou a "Técnica Superior Especialista"
       Quando Ana Ferreira recebe o documento de "AC-2026-0098"
@@ -119,10 +122,12 @@ Funcionalidade: Transferir um documento gerado
   Regra: Só os participantes do procedimento abrem o seu documento
     # Participantes, no MVP: o requerente e quem fechou o procedimento.
 
+    @wip
     Cenário: Quem fechou o procedimento recebe o documento
       Quando Joana Pires pede o documento de "AC-2026-0098"
       Então recebe "ordem_reembolso_AC-2026-0098.pdf"
 
+    @wip
     Esquema do Cenário: Mais ninguém recebe o documento, mesmo com o endereço
       Quando <pessoa> pede o documento de "AC-2026-0098"
       Então é recusado
@@ -133,6 +138,7 @@ Funcionalidade: Transferir um documento gerado
         | Rui Matos     |
         | Carla Dias    |
 
+    @wip
     Cenário: Sem iniciar sessão não se pede o documento
       Quando alguém sem sessão iniciada pede o documento de "AC-2026-0098"
       Então é-lhe pedido que inicie sessão

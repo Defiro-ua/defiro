@@ -1,6 +1,7 @@
 package io.github.defiro.engine.internal;
 
 import io.github.defiro.spec.StepSpecification;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,15 +27,23 @@ public class ProcedureSeed {
     private final Tasks tasks;
     private final Procedures procedures;
     private final AuditLog auditLog;
+    private final GeneratedDocuments generatedDocuments;
 
     ProcedureSeed(
-            JdbcClient jdbc, JsonMapper json, Files files, Tasks tasks, Procedures procedures, AuditLog auditLog) {
+            JdbcClient jdbc,
+            JsonMapper json,
+            Files files,
+            Tasks tasks,
+            Procedures procedures,
+            AuditLog auditLog,
+            GeneratedDocuments generatedDocuments) {
         this.jdbc = jdbc;
         this.json = json;
         this.files = files;
         this.tasks = tasks;
         this.procedures = procedures;
         this.auditLog = auditLog;
+        this.generatedDocuments = generatedDocuments;
     }
 
     /** The submitted request, and the task of the step it waits at. */
@@ -143,13 +152,45 @@ public class ProcedureSeed {
 
     public record Resubmitted(Submitted request, int version, List<UUID> newFiles) {}
 
+    /**
+     * The closed procedure was closed at this time, not now: its closing and the approval that
+     * closed it, the newest in its audit log, both say so.
+     */
+    @Transactional
+    public void closedAt(String reference, OffsetDateTime at) {
+        UUID procedure = procedures.find(reference).orElseThrow().id();
+        jdbc.sql("update engine.procedure set closed_at = :at where id = :id and status = 'closed'")
+                .param("at", at)
+                .param("id", procedure)
+                .update();
+        jdbc.sql("""
+                        update engine.audit_log set occurred_at = :at
+                        where id = (select id from engine.audit_log
+                                    where procedure_id = :procedure and action = :approved
+                                    order by id desc limit 1)""")
+                .param("at", at)
+                .param("procedure", procedure)
+                .param("approved", Decisions.APPROVED)
+                .update();
+    }
+
+    /** Stands in for UC22: the final document generated when the procedure was closed. */
+    public void generated(String reference, String filename, String mediaType, byte[] content) {
+        generatedDocuments.store(procedures.find(reference).orElseThrow().id(), filename, mediaType, content);
+    }
+
     private void forget(String reference) {
         jdbc.sql("""
                         delete from engine.file_content where storage_key in (
                             select f.storage_key from engine.file f
                             join engine.procedure p on p.id = f.procedure_id
                             where p.reference = :reference)""").param("reference", reference).update();
-        for (String table : List.of("file", "audit_log", "task", "document")) {
+        jdbc.sql("""
+                        delete from engine.file_content where storage_key in (
+                            select g.storage_key from engine.generated_document g
+                            join engine.procedure p on p.id = g.procedure_id
+                            where p.reference = :reference)""").param("reference", reference).update();
+        for (String table : List.of("generated_document", "file", "audit_log", "task", "document")) {
             jdbc.sql("delete from engine." + table
                             + " where procedure_id in (select id from engine.procedure where reference = :reference)")
                     .param("reference", reference)

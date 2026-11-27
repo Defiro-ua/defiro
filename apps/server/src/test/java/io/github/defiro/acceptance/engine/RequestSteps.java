@@ -94,11 +94,16 @@ public class RequestSteps {
 
     @Given("{person} submitted the request {string} for {string} with")
     public void submittedTheRequest(String person, String reference, String workflow, DataTable answers) {
+        submitted(person, reference, workflow, answers.asMaps());
+    }
+
+    /** The request, submitted with these answers: each row is a «field» and its «answer». */
+    void submitted(String person, String reference, String workflow, List<Map<String, String>> answers) {
         Deployed deployed = workflows.get(workflow);
         assertThat(deployed).as("the workflow " + workflow).isNotNull();
         List<StepSpecification> steps = deployed.specification().steps();
         Account account = entraId.account(person);
-        this.answers = answers.asMaps().stream()
+        this.answers = answers.stream()
                 .map(row -> new Answer(field(row.get("field")), row.get("field"), row.get("answer")))
                 .toList();
         firstReview = steps.get(1);
@@ -145,6 +150,15 @@ public class RequestSteps {
     public void withTheFiles(String file, String otherFile) {
         attach(file);
         attach(otherFile);
+    }
+
+    /** The names of the steps of a deployed workflow, in the order of its path. */
+    List<String> path(String workflow) {
+        Deployed deployed = workflows.get(workflow);
+        assertThat(deployed).as("the workflow " + workflow).isNotNull();
+        return deployed.specification().steps().stream()
+                .map(StepSpecification::name)
+                .toList();
     }
 
     /** The reference of the submitted request. */
