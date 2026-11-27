@@ -1,10 +1,7 @@
 package io.github.defiro.engine.internal;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,7 +29,7 @@ class Files {
 
     @Transactional
     StoredFile store(UUID procedure, UUID document, String filename, byte[] content) {
-        StoredFile file = new StoredFile(UUID.randomUUID(), procedure, document, filename, sha256(content));
+        StoredFile file = new StoredFile(UUID.randomUUID(), procedure, document, filename, Digests.sha256(content));
         String key = storageKey(file.id());
         jdbc.sql("""
                         insert into engine.file (id, procedure_id, document_id, filename, storage_key, sha256)
@@ -82,13 +79,5 @@ class Files {
     // Each file has its own key in the File store: its id.
     private static String storageKey(UUID file) {
         return file.toString();
-    }
-
-    private static String sha256(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Every Java platform has SHA-256", e);
-        }
     }
 }
