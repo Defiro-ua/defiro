@@ -131,6 +131,21 @@ class FinalDocumentsIT {
         assertThat(disposition.getFilename()).isEqualTo(FILENAME);
     }
 
+    // Whatever else is stored is never shown inline: only a PDF of defiro's own making is.
+    @Test
+    void aStoredTypeThatIsNotPdfIsNotServed() throws Exception {
+        String other = "AC-2026-0148";
+        Decisions.Approved byRui = approve(submit(other).task(), rui);
+        Decisions.Approved byCarla = approve(byRui.nextTask(), carla);
+        approve(byCarla.nextTask(), joana);
+        seed.closedAt(other, OffsetDateTime.parse("2026-10-17T15:30:00+01:00"));
+        seed.generated(other, "pagina.html", "text/html", "<script>alert(1)</script>".getBytes());
+
+        mvc.perform(get("/api/engine/procedures/" + other + "/document")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(TRUSTED_KEY, claims -> claims.subject(ana.id()))))
+                .andExpect(status().isNotFound());
+    }
+
     // Not closed yet: waiting at the last step, with a stored document all the same.
     @Test
     void notClosedHasNoDocument() {

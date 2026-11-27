@@ -51,11 +51,20 @@ procedure was closed (criterion 4), even if someone later changes unit or job ti
 
 ## Depends on
 
-- **UC22** closes the procedure and stores the PDF. Until then, a test step stores it.
+- **UC22** closes the procedure and stores the PDF. Until then, a test step stores it. This branch must
+  not ship before UC22 stores the document at closing: until then «Ver documento» in the closing
+  notice would find no document.
 - **UC13 / UC17**: the procedure and its participants come from the Engine's tables, still being settled
   between `feature/UC13-step-contracts` and `feature/UC17-approve-document`
   (see `docs/uc13-engine-handoff.md` on the UC13 branch).
 - **UC15**: the File store, behind the `FileStore` interface of the UC17 branch.
+
+## Decisions left to UC22
+
+- The document table has one document per procedure (its primary key is the procedure), and UC17 lets
+  the closer undo the closing. UC22 must choose: either undoing the closing deletes the generated
+  document, or a new closing replaces it. Either way, a procedure closed again never serves the old
+  PDF (old closer, old date).
 
 ## Left to the builder
 

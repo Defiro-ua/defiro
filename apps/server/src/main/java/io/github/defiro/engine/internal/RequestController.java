@@ -78,8 +78,11 @@ class RequestController {
     ResponseEntity<byte[]> document(@PathVariable String reference, @AuthenticationPrincipal ClaimAccessor user) {
         return finalDocuments
                 .open(reference, Person.of(user))
+                // Shown inline, so only the PDF defiro makes: any other stored type is not served
+                .filter(opened -> MediaType.APPLICATION_PDF_VALUE.equalsIgnoreCase(
+                        opened.document().mediaType()))
                 .map(opened -> ResponseEntity.ok()
-                        .contentType(MediaType.parseMediaType(opened.document().mediaType()))
+                        .contentType(MediaType.APPLICATION_PDF)
                         .header(
                                 HttpHeaders.CONTENT_DISPOSITION,
                                 ContentDisposition.inline()
