@@ -93,7 +93,7 @@ export function DocumentDialog({ reference, onClose }: Props) {
               {documentFailed.texto}
             </p>
           )}
-          {pdf && pdf !== 'failed' && <iframe title={pdf.filename} src={pdf.url} className="h-[70vh] w-full rounded-md border border-line-strong" />}
+          {pdf && pdf !== 'failed' && <iframe title={pdf.filename} src={pdf.url} className="h-[80vh] w-full shrink-0 rounded-md border border-line-strong" />}
         </div>
       )}
     </dialog>

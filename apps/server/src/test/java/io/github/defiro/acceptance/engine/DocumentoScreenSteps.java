@@ -113,8 +113,12 @@ public class DocumentoScreenSteps {
     public void abreEDesce(String reference) {
         abreODocumento(person, reference);
         assertThat(dialog().locator("iframe")).isVisible();
-        // The dialog's box is what scrolls; the bar is sticky at its top
-        dialog().locator("> div").evaluate("box => box.scrollTo(0, box.scrollHeight)");
+        // The dialog's box is what scrolls, taller than the screen; the bar is sticky at its top
+        Locator box = dialog().locator("> div");
+        box.evaluate("box => box.scrollTo(0, box.scrollHeight)");
+        Assertions.assertThat(((Number) box.evaluate("box => box.scrollTop")).doubleValue())
+                .as("the dialog's box scrolled")
+                .isGreaterThan(0);
     }
 
     @Então("continua a ver «Fechar» e «Transferir PDF»")
@@ -146,7 +150,8 @@ public class DocumentoScreenSteps {
         assertThat(dialog()).hasCount(0);
         assertThat(documento(reference)).isFocused();
         Assertions.assertThat(page.evaluate(
-                        "() => document.activeElement.closest('section').querySelector('h2').textContent"))
+                        "() => document.activeElement?.closest('section')?.querySelector('h2')?.textContent ?? null"))
+                .as("the heading of the section that has the focus")
                 .isEqualTo("Os meus pedidos");
     }
 
