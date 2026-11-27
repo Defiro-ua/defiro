@@ -13,11 +13,19 @@ type Props = {
 
 type Pdf = { url: string; filename: string } | 'failed' | null
 
+/** Saves the PDF that is already here, through a link to its blob URL: no second request */
+function save({ url, filename }: { url: string; filename: string }) {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+}
+
 /**
  * The final document of a closed request (UC23): the stored PDF itself, as the browser shows it,
  * under a bar with «Fechar» and «Transferir PDF» that stays at the top while it scrolls.
  */
-export function DocumentDialog({ reference, onClose }: Props) {
+export function DocumentDialog({ reference, onClose, onSaved }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const returnTo = useRef<Element | null>(null)
   const [pdf, setPdf] = useState<Pdf>(null)
@@ -67,7 +75,15 @@ export function DocumentDialog({ reference, onClose }: Props) {
               Fechar <span className="sr-only">o documento</span>
             </Button>
             <span className="flex-1" />
-            <Button icon="download" disabled={!pdf || pdf === 'failed'}>
+            <Button
+              icon="download"
+              disabled={!pdf || pdf === 'failed'}
+              onClick={() => {
+                if (!pdf || pdf === 'failed') return
+                save(pdf)
+                onSaved(pdf.filename)
+              }}
+            >
               Transferir PDF
             </Button>
           </div>

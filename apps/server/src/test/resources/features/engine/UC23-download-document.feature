@@ -96,7 +96,7 @@ Funcionalidade: Transferir um documento gerado
       Então recebe "ordem_reembolso_AC-2026-0098.pdf" como "application/pdf"
       E é a ordem de reembolso gerada quando o procedimento foi fechado
 
-    @browser @wip
+    @browser
     Cenário: «Transferir PDF» guarda o PDF e di-lo
       Dado que Ana Ferreira abriu o documento de "AC-2026-0098"
       Quando escolhe «Transferir PDF»

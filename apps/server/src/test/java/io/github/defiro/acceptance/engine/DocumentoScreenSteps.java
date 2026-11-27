@@ -2,6 +2,7 @@ package io.github.defiro.acceptance.engine;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
+import com.microsoft.playwright.Download;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -33,6 +34,8 @@ public class DocumentoScreenSteps {
     private String reference;
     // The server's answer to the dialog's request for the document
     private Response document;
+    // The file the browser was given by «Transferir PDF», or straight away where it cannot show a PDF
+    private Download download;
     // Who the scenario is about, for the steps that say «ela»
     private String person;
 
@@ -153,6 +156,28 @@ public class DocumentoScreenSteps {
                         "() => document.activeElement?.closest('section')?.querySelector('h2')?.textContent ?? null"))
                 .as("the heading of the section that has the focus")
                 .isEqualTo("Os meus pedidos");
+    }
+
+    @Dado("que {person} abriu o documento de {string}")
+    public void abriuODocumentoSemMais(String person, String reference) {
+        abriuODocumento(person, reference);
+    }
+
+    @Quando("escolhe «Transferir PDF»")
+    public void escolheTransferir() {
+        download = page.waitForDownload(() -> transferir().click());
+    }
+
+    @Então("{string} é transferido")
+    public void eTransferido(String filename) {
+        Assertions.assertThat(download).as("a download started").isNotNull();
+        Assertions.assertThat(download.suggestedFilename()).isEqualTo(filename);
+    }
+
+    @E("é-lhe dito que foi guardado")
+    public void foiGuardado() {
+        // The notice's title; its longer text is for screen readers and follows in the same line
+        assertThat(page.getByRole(AriaRole.STATUS).getByText("PDF guardado")).isVisible();
     }
 
     private Locator dialog() {

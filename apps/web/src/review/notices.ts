@@ -47,6 +47,8 @@ export const releaseFailed: Notice = { tom: 'bad', titulo: 'Não foi possível l
 
 export const documentFailed: Notice = { tom: 'bad', titulo: 'Não foi possível abrir o documento', texto: 'Tente outra vez daqui a pouco.' }
 
+export const savedNotice = (filename: string): Notice => ({ tom: 'ok', titulo: 'PDF guardado', texto: `${filename} foi guardado.` })
+
 export const releasedNotice: Notice = { tom: 'ok', titulo: 'Tarefa libertada' }
 
 /** «22/11/2026», in the organization's time */

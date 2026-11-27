@@ -100,4 +100,32 @@ describe('DocumentDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => expect(documento).toHaveFocus())
   })
+
+  describe('«Transferir PDF»', () => {
+    let clicked: HTMLAnchorElement[]
+    beforeEach(() => {
+      clicked = []
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push(this)
+      })
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('transferirSaves', async () => {
+      vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+      const onSaved = vi.fn()
+      render(<DocumentDialog reference="AC-2026-0098" onClose={vi.fn()} onSaved={onSaved} />)
+      await screen.findByTitle(filename)
+
+      await userEvent.click(screen.getByRole('button', { name: /^Transferir PDF/ }))
+
+      expect(clicked).toHaveLength(1)
+      expect(clicked[0].getAttribute('download')).toBe(filename)
+      expect(clicked[0].getAttribute('href')).toBe('blob:http://localhost/0098')
+      expect(onSaved).toHaveBeenCalledExactlyOnceWith(filename)
+      expect(api.fetchDocument).toHaveBeenCalledTimes(1)
+    })
+  })
 })

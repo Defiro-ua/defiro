@@ -9,7 +9,7 @@ import { Icon } from '../components/Icon'
 import { AppShell } from '../components/layout/AppShell'
 import { useFocusOnArrival } from '../lib/useFocusOnArrival'
 import { useProfile } from '../lib/useProfile'
-import { refusedNotice, takeFailed, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
+import { refusedNotice, savedNotice, takeFailed, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
 import { MyRequests } from './MyRequests'
@@ -162,7 +162,7 @@ export function InboxPage() {
         </section>
       )}
       <MyRequests onDocument={setDocumentOf} />
-      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={() => {}} />
+      <DocumentDialog reference={documentOf} onClose={() => setDocumentOf(null)} onSaved={(filename) => setNotice(savedNotice(filename))} />
     </AppShell>
   )
 }
