@@ -1,7 +1,7 @@
 # language: pt
 # Exemplos: critérios de aceitação de UC23, diagrama de sequência («5 · Download») e protótipo web
 # (pedido AC-2026-0098, já fechado, e DocumentDialog). Desenho: docs/uc23-download-document-design.md.
-# @wip até a UC22 guardar o documento e os passos existirem.
+# Os dois cenários do nome e do cargo ficam @wip até a UC22 gerar o PDF.
 @UC23
 Funcionalidade: Transferir um documento gerado
   Como participante de um workflow,
@@ -106,12 +106,14 @@ Funcionalidade: Transferir um documento gerado
   Regra: O documento mostra cada pessoa com o nome e o cargo
     # Tal como eram quando o procedimento foi fechado: o PDF é gerado uma vez e nunca mais.
 
+    # @wip até a UC22 gerar o PDF com estes dados.
     @wip
     Cenário: Cada pessoa no documento tem o nome e o cargo
       Quando Ana Ferreira recebe o documento de "AC-2026-0098"
       Então mostra "Requerente" como "Ana Ferreira (Técnica Superior)"
       E mostra "Validado por" como "Joana Pires (Técnica de Recursos Humanos) a 17/10/2026"
 
+    # @wip até a UC22 gerar o PDF com estes dados.
     @wip
     Cenário: Uma mudança de cargo mais tarde não muda o documento
       Dado que o cargo de Ana Ferreira passou a "Técnica Superior Especialista"
