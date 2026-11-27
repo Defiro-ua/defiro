@@ -168,6 +168,20 @@ public class DocumentoScreenSteps {
         download = page.waitForDownload(() -> transferir().click());
     }
 
+    @Dado("que o navegador de {person} não consegue mostrar um PDF no ecrã")
+    public void semVisorDePdf(String person) {
+        this.person = person;
+        // Before the page loads, so that the app sees it from its first line
+        page.addInitScript("Object.defineProperty(navigator,'pdfViewerEnabled',{get:()=>false})");
+    }
+
+    @Quando("ela abre o documento de {string} em «Os meus pedidos»")
+    public void elaAbreODocumento(String reference) {
+        // No dialog opens here: the PDF goes straight to a download
+        browser.signIn(person);
+        download = page.waitForDownload(() -> documento(reference).click());
+    }
+
     @Então("{string} é transferido")
     public void eTransferido(String filename) {
         Assertions.assertThat(download).as("a download started").isNotNull();

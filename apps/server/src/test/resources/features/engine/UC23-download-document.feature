@@ -82,7 +82,7 @@ Funcionalidade: Transferir um documento gerado
       Quando escolhe «Fechar»
       Então volta a «Os meus pedidos», em «Documento» de "AC-2026-0098"
 
-    @browser @wip
+    @browser
     Cenário: Um dispositivo que não mostra o PDF transfere-o
       Dado que o navegador de Ana Ferreira não consegue mostrar um PDF no ecrã
       Quando ela abre o documento de "AC-2026-0098" em «Os meus pedidos»

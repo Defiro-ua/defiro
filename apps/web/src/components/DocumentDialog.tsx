@@ -29,6 +29,10 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const returnTo = useRef<Element | null>(null)
   const [pdf, setPdf] = useState<Pdf>(null)
+  // A device with no PDF viewer cannot show the document, so it downloads it at once and shows no dialog
+  const noViewer = navigator.pdfViewerEnabled === false
+  const saved = useRef<string | null>(null)
+  const shown = !!reference && (!noViewer || pdf === 'failed')
 
   // Fetched once for each opening; its blob URL lives until the dialog closes
   useEffect(() => {
@@ -51,13 +55,21 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
   }, [reference])
 
   useEffect(() => {
+    if (!noViewer || !pdf || pdf === 'failed' || saved.current === pdf.url) return
+    saved.current = pdf.url
+    save(pdf)
+    onSaved(pdf.filename)
+    onClose()
+  }, [noViewer, pdf, onSaved, onClose])
+
+  useEffect(() => {
     const d = ref.current
     if (!d) return
-    if (reference && !d.open) {
+    if (shown && !d.open) {
       returnTo.current = document.activeElement
       d.showModal()
-    } else if (!reference && d.open) d.close()
-  }, [reference])
+    } else if (!shown && d.open) d.close()
+  }, [shown])
 
   function closed() {
     if (reference) onClose()
@@ -68,7 +80,7 @@ export function DocumentDialog({ reference, onClose, onSaved }: Props) {
 
   return (
     <dialog ref={ref} onClose={closed} aria-labelledby="doc-titulo" className="w-[680px] font-sans">
-      {reference && (
+      {shown && (
         <div className="box-border flex max-h-[calc(100vh-48px)] flex-col gap-4.5 overflow-auto rounded-menu border border-edge bg-bg px-7 pb-7 text-ink">
           <div className="sticky top-0 z-2 -mx-7 flex flex-wrap items-center gap-2.5 border-b border-line bg-bg px-7 pt-4 pb-3.5">
             <Button variant="secondary" icon="x" onClick={() => ref.current?.close()}>

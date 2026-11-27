@@ -111,6 +111,7 @@ describe('DocumentDialog', () => {
     })
     afterEach(() => {
       vi.restoreAllMocks()
+      Object.defineProperty(navigator, 'pdfViewerEnabled', { value: true, configurable: true })
     })
 
     it('transferirSaves', async () => {
@@ -126,6 +127,23 @@ describe('DocumentDialog', () => {
       expect(clicked[0].getAttribute('href')).toBe('blob:http://localhost/0098')
       expect(onSaved).toHaveBeenCalledExactlyOnceWith(filename)
       expect(api.fetchDocument).toHaveBeenCalledTimes(1)
+    })
+
+    it('noViewerDownloadsAtOnce', async () => {
+      Object.defineProperty(navigator, 'pdfViewerEnabled', { value: false, configurable: true })
+      const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal')
+      vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+      const onSaved = vi.fn()
+      const onClose = vi.fn()
+      render(<DocumentDialog reference="AC-2026-0098" onClose={onClose} onSaved={onSaved} />)
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalledExactlyOnceWith(filename))
+
+      expect(showModal).not.toHaveBeenCalled()
+      expect(document.querySelector('iframe')).toBeNull()
+      expect(clicked).toHaveLength(1)
+      expect(clicked[0].getAttribute('download')).toBe(filename)
+      expect(onClose).toHaveBeenCalledTimes(1)
     })
   })
 })
