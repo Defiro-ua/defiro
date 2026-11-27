@@ -47,11 +47,14 @@ export const releaseFailed: Notice = { tom: 'bad', titulo: 'Não foi possível l
 
 export const releasedNotice: Notice = { tom: 'ok', titulo: 'Tarefa libertada' }
 
+/** «22/11/2026», in the organization's time */
+export function date(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 /** «22/11/2026 18:32», in the organization's time, as the prototype shows dates (fmtDateTime) */
 export function dateTime(iso: string) {
   const at = new Date(iso)
-  const zone = { timeZone: 'Europe/Lisbon' } as const
-  const day = at.toLocaleDateString('pt-PT', { ...zone, day: '2-digit', month: '2-digit', year: 'numeric' })
-  const time = at.toLocaleTimeString('pt-PT', { ...zone, hour: '2-digit', minute: '2-digit' })
-  return `${day} ${time}`
+  const time = at.toLocaleTimeString('pt-PT', { timeZone: 'Europe/Lisbon', hour: '2-digit', minute: '2-digit' })
+  return `${date(iso)} ${time}`
 }

@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/engine'
 import type { ReviewRequest } from '../api/engine'
 import type { Profile } from '../api/session'
@@ -11,6 +11,7 @@ import { RequestPage } from './RequestPage'
 vi.mock('../api/engine', async (original) => ({
   ...(await original<typeof import('../api/engine')>()),
   listInbox: vi.fn(),
+  listMyRequests: vi.fn(),
   openRequest: vi.fn(),
   approve: vi.fn(),
   take: vi.fn(),
@@ -112,6 +113,7 @@ function openAt(pathname: string, state?: unknown) {
   )
 }
 
+beforeEach(() => vi.mocked(api.listMyRequests).mockResolvedValue([]))
 afterEach(() => vi.resetAllMocks())
 
 describe('the inbox (until UC27)', () => {

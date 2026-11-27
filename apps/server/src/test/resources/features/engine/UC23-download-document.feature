@@ -30,13 +30,13 @@ Funcionalidade: Transferir um documento gerado
 
   Regra: Com o procedimento fechado, o requerente abre o documento final em «Os meus pedidos»
 
-    @browser @wip
+    @browser
     Cenário: Um pedido fechado oferece o seu documento em «Os meus pedidos»
       Quando Ana Ferreira abre «Os meus pedidos»
       Então o pedido "AC-2026-0098" mostra "Fechado a 17/10/2026"
       E oferece «Documento»
 
-    @browser @wip
+    @browser
     Cenário: Um pedido que não está fechado não oferece documento
       Dado que o pedido "AC-2026-0147" de Ana Ferreira está em «Verificação financeira»
       Quando Ana Ferreira abre «Os meus pedidos»

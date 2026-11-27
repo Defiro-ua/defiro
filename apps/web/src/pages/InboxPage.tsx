@@ -11,6 +11,7 @@ import { useProfile } from '../lib/useProfile'
 import { refusedNotice, takeFailed, undoFailed, undoneNotice, type ReviewState } from '../review/notices'
 import { useArrival } from '../review/useArrival'
 import { paths } from '../routes'
+import { MyRequests } from './MyRequests'
 
 /**
  * TEMPORARY, for UC27 (Daniel): the least of the task inbox that UC17 needs, the requests waiting
@@ -157,6 +158,8 @@ export function InboxPage() {
           )}
         </section>
       )}
+      {/* The document opens on its own screen (UC23's DocumentDialog, next) */}
+      <MyRequests onDocument={() => {}} />
     </AppShell>
   )
 }
