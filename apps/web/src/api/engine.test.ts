@@ -1,5 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { approve, deleteNote, fileField, fileUrl, listInbox, openRequest, reject, release, returnToRequester, saveNote, take, undoDecision } from './engine'
+import {
+  approve,
+  deleteNote,
+  fileField,
+  fetchDocument,
+  fileUrl,
+  listInbox,
+  listMyRequests,
+  openRequest,
+  reject,
+  release,
+  returnToRequester,
+  saveNote,
+  take,
+  undoDecision,
+} from './engine'
 
 function answer(status: number, body?: unknown) {
   const fetch = vi.fn().mockResolvedValue(new Response(body === undefined ? null : JSON.stringify(body), { status }))
@@ -134,5 +149,42 @@ describe('the Engine API', () => {
   it('fails when the server refuses the decision for another reason', async () => {
     answer(403)
     await expect(approve('t1')).rejects.toThrow('answered 403')
+  })
+
+  it('lists my requests', async () => {
+    const requests = [
+      { reference: 'AC-2026-0098', workflow: 'Ajudas de custo', status: 'closed', currentStep: null, closedAt: '2026-10-17T15:30:00+01:00', hasDocument: true },
+    ]
+    const fetch = answer(200, requests)
+
+    await expect(listMyRequests()).resolves.toEqual(requests)
+    expect(fetch.mock.calls[0][0]).toBe('/api/engine/my-requests')
+  })
+
+  it('fetches the document of a request with the name the server gives it', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response('%PDF-1.4', {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="ordem_reembolso_AC-2026-0098.pdf"' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    const document = await fetchDocument('AC-2026-0098')
+
+    expect(fetch.mock.calls[0][0]).toBe('/api/engine/procedures/AC-2026-0098/document')
+    expect(document.filename).toBe('ordem_reembolso_AC-2026-0098.pdf')
+    expect(document.blob.type).toBe('application/pdf')
+  })
+
+  it('names the document after the request when the server gives no name', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('%PDF-1.4', { status: 200 })))
+
+    await expect(fetchDocument('AC-2026-0098')).resolves.toMatchObject({ filename: 'ordem_reembolso_AC-2026-0098.pdf' })
+  })
+
+  it('has no document for someone who takes no part in the request', async () => {
+    answer(403)
+    await expect(fetchDocument('AC-2026-0098')).rejects.toThrow('answered 403')
   })
 })

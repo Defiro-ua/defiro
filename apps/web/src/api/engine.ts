@@ -47,6 +47,17 @@ export type ReviewRequest = {
   mine: boolean
 }
 
+/** One of this person's own requests, in «Os meus pedidos» (GET /api/engine/my-requests) */
+export type MyRequest = {
+  reference: string
+  workflow: string
+  status: string
+  currentStep: string | null
+  /** When the procedure was closed, as an ISO date and time, or null */
+  closedAt: string | null
+  hasDocument: boolean
+}
+
 export type Taken = { task: string; reference: string }
 
 /** A reviewer's note on a field of the request: an answer's field, or «file:» and a file's id (UC19) */
@@ -88,6 +99,36 @@ export async function openRequest(reference: string): Promise<Opened> {
   if (response.status === 403 || response.status === 404) return { found: false, status: response.status }
   if (!response.ok) throw unexpected('GET', url, response)
   return { found: true, request: (await response.json()) as ReviewRequest }
+}
+
+export async function listMyRequests(): Promise<MyRequest[]> {
+  const url = '/api/engine/my-requests'
+  const response = await send('GET', url)
+  if (!response.ok) throw unexpected('GET', url, response)
+  return (await response.json()) as MyRequest[]
+}
+
+/** The final document of a closed procedure (UC23), with the file name the server gives it */
+export async function fetchDocument(reference: string): Promise<{ blob: Blob; filename: string }> {
+  const url = `${PROCEDURES}/${encodeURIComponent(reference)}/document`
+  const response = await send('GET', url)
+  if (response.status !== 200) throw unexpected('GET', url, response)
+  return { blob: await response.blob(), filename: filenameOf(response) ?? `ordem_reembolso_${reference}.pdf` }
+}
+
+// The name in Content-Disposition: the UTF-8 one (filename*) when there is one, else the plain one
+function filenameOf(response: Response): string | null {
+  const header = response.headers.get('Content-Disposition') ?? ''
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim())
+    } catch {
+      // Fall through to the plain name
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header)
+  return plain ? plain[1].trim() : null
 }
 
 /** The address of a file of the request, to open in the browser */
