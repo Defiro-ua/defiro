@@ -1,4 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../api/engine'
 import { documentFailed } from '../review/notices'
@@ -72,5 +74,30 @@ describe('DocumentDialog', () => {
     rerender(<DocumentDialog reference={null} onClose={vi.fn()} onSaved={vi.fn()} />)
 
     await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/0098'))
+  })
+
+  it('fecharReturnsFocus', async () => {
+    vi.mocked(api.fetchDocument).mockResolvedValue(pdf())
+    // As «Os meus pedidos» opens it: «Documento» gives the reference, «Fechar» takes it away
+    function Opener() {
+      const [reference, setReference] = useState<string | null>(null)
+      return (
+        <>
+          <button type="button" onClick={() => setReference('AC-2026-0098')}>
+            Documento do pedido AC-2026-0098
+          </button>
+          <DocumentDialog reference={reference} onClose={() => setReference(null)} onSaved={vi.fn()} />
+        </>
+      )
+    }
+    render(<Opener />)
+    const documento = screen.getByRole('button', { name: 'Documento do pedido AC-2026-0098' })
+
+    await userEvent.click(documento)
+    await screen.findByTitle(filename)
+    await userEvent.click(screen.getByRole('button', { name: /^Fechar/ }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(documento).toHaveFocus())
   })
 })

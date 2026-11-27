@@ -76,7 +76,7 @@ Funcionalidade: Transferir um documento gerado
         | 768     |
         | 1440    |
 
-    @browser @wip
+    @browser
     Cenário: «Fechar» fecha o documento e volta ao sítio de onde foi aberto
       Dado que Ana Ferreira abriu o documento de "AC-2026-0098" em «Os meus pedidos»
       Quando escolhe «Fechar»

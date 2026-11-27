@@ -130,6 +130,26 @@ public class DocumentoScreenSteps {
         }
     }
 
+    @Dado("que {person} abriu o documento de {string} em «Os meus pedidos»")
+    public void abriuODocumento(String person, String reference) {
+        abreODocumento(person, reference);
+        assertThat(dialog()).isVisible();
+    }
+
+    @Quando("escolhe «Fechar»")
+    public void escolheFechar() {
+        fechar().click();
+    }
+
+    @Então("volta a «Os meus pedidos», em «Documento» de {string}")
+    public void voltaADocumento(String reference) {
+        assertThat(dialog()).hasCount(0);
+        assertThat(documento(reference)).isFocused();
+        Assertions.assertThat(page.evaluate(
+                        "() => document.activeElement.closest('section').querySelector('h2').textContent"))
+                .isEqualTo("Os meus pedidos");
+    }
+
     private Locator dialog() {
         return page.getByRole(AriaRole.DIALOG);
     }
