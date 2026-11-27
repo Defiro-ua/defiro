@@ -1,6 +1,6 @@
 # UC23 · Download a generated document: design
 
-**Status:** agreed with benny on 2026-11-27, for team review. The scenarios are in
+**Status:** agreed with benny on 2026-11-27. The scenarios are in
 [`UC23-download-document.feature`](../apps/server/src/test/resources/features/engine/UC23-download-document.feature).
 
 ## Intent
@@ -62,10 +62,6 @@ procedure was closed (criterion 4), even if someone later changes unit or job ti
 - The endpoint's path and how the web app detects that the browser cannot show a PDF.
 - How «Os meus pedidos» knows a request has a document (for example, a flag in the list's response).
 
-## Open questions for the team
+## Outside the MVP
 
-1. Reviewers (Rui, Carla) and Finance have no way back to a closed request in the prototype. Does Finance
-   need one, for example a list of the requests they took part in? It would widen who can open the
-   document. Not part of UC23.
-2. Should someone who takes no part get 404, the same as an unknown reference, rather than 403? The same
-   question is open in UC17's draft.
+- A way back to closed requests for reviewers and Finance.
